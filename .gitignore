@@ -1,0 +1,17 @@
+**/node_modules/
+**/.venv/
+**/.venv*/
+**/__pycache__/
+**/.pytest_cache/
+**/.env
+**/.env.*
+!**/.env.example
+!**/.env.sample
+*.log
+backups/
+Frontend/dist/
+Backend/*.db
+Backend/*.db-*
+Backend/storage/
+Backend/data/raw/
+Backend/data/paysim_transactions.csv
