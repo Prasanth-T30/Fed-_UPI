@@ -150,3 +150,5 @@ On PaySim with IID banks, federated training matches local-only models — there
 ## Limitations
 
 Synthetic data; secure aggregation is simulated (no real key exchange, no dropout handling); ε covers supervised-model training only; all banks are simulated in one process; the scoring API sees plain transaction signals; the risk score is not a calibrated probability.
+#   F e d - _ U P I  
+ 
