@@ -36,8 +36,9 @@ if ! "$PYTHON" -c 'import fastapi, torch, sklearn, sqlalchemy, openpyxl, docx, r
 fi
 
 if [[ ! -f artifacts/fedupi_model.pt ]]; then
-  echo "No model artifact found; running bounded first-time training..."
-  "$PYTHON" scripts/train.py --scale 0.5 --quick
+  echo "No model artifact found. Train from your labelled data first:" >&2
+  echo "  cd Backend && ./.venv/bin/python scripts/train.py --data <path-to-file> --quick" >&2
+  exit 1
 fi
 
 ARGS=(app.main:app --host 127.0.0.1 --port "$PORT")

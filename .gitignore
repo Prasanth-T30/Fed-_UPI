@@ -17,3 +17,21 @@ Backend/*.db-*
 Backend/storage/
 Backend/data/raw/
 Backend/data/paysim_transactions.csv
+
+# User-supplied and generated datasets
+/samples/
+/Backend/data/*.csv
+/Backend/data/*.tsv
+/Backend/data/*.xlsx
+/Backend/data/*.xls
+/Backend/data/*.xlsm
+/Backend/data/*.json
+
+# Generated documents, reports and downloaded research files
+*.pdf
+*.doc
+*.docx
+*.odt
+*.rtf
+/docs/
+/documents/

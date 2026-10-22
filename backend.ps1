@@ -49,9 +49,7 @@ if ($LASTEXITCODE -ne 0) {
 }
 
 if (-not (Test-Path 'artifacts\fedupi_model.pt')) {
-    Write-Host 'No model artifact found; running bounded first-time training...'
-    & $python scripts\train.py --scale 0.5 --quick
-    if ($LASTEXITCODE -ne 0) { throw 'Initial model training failed.' }
+    throw 'No model artifact found. Train from your labelled data first: cd Backend; .\.venv\Scripts\python.exe scripts\train.py --data <path-to-file> --quick'
 }
 
 $uvicornArgs = @('-m', 'uvicorn', 'app.main:app', '--host', '127.0.0.1', '--port', "$Port")

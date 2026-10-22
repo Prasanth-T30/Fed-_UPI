@@ -46,6 +46,10 @@ nav a.on { background: var(--accent); color: var(--on-accent); box-shadow: 0 6px
 .spacer { flex: 1; }
 .main { padding: 30px 32px 56px; min-width: 0; }
 .page { display: flex; flex-direction: column; gap: 20px; max-width: 1240px; margin: 0 auto; }
+.route-loader { min-height: 240px; display: grid; place-content: center; justify-items: center; gap: 10px; color: var(--muted); }
+.route-loader i { width: 28px; height: 28px; border: 3px solid var(--line); border-top-color: var(--accent); border-radius: 50%; animation: route-spin .65s linear infinite; }
+.route-loader span { font-size: 12px; }
+@keyframes route-spin { to { transform: rotate(360deg); } }
 .page-head { display: flex; justify-content: space-between; align-items: flex-end; gap: 16px; flex-wrap: wrap; }
 .page-head h1 { font-size: 27px; font-weight: 650; letter-spacing: -.025em; } .page-head p { color: var(--muted); max-width: 620px; margin-top: 5px; }
 .actions { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }

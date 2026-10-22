@@ -94,3 +94,25 @@ cd Backend
 ```
 
 Linux/macOS uses `./.venv/bin/python` for the final command.
+
+## Training data
+
+FedUPI does not generate or silently substitute demo transactions. Uploads and API-scored transactions are the only records shown by the application.
+
+Federated Lab trains from the signed-in user's newest uploaded dataset. The file must contain a fraud label such as `is_fraud`, `fraud`, `label` or `class`, with both legitimate and fraudulent rows.
+
+Command-line training also requires an explicit labelled file:
+
+```powershell
+cd Backend
+.\.venv\Scripts\python.exe scripts\train.py --data C:\path\to\transactions.csv --quick
+```
+
+Linux/macOS:
+
+```bash
+cd Backend
+./.venv/bin/python scripts/train.py --data /path/to/transactions.csv --quick
+```
+
+CSV, Excel, JSON, TSV and Word-table files are supported. PaySim can only be used when explicitly selected with `--dataset paysim` and its source archive has been installed.

@@ -261,12 +261,10 @@ def test_alert_workflow(h):
     assert c.patch("/api/transactions/99999999", headers=h, json={"status": "dismissed"}).status_code == 404
 
 
-def test_simulation_and_overview(h):
-    r = c.post("/api/simulate?n=30", headers=h).json()
-    assert r["count"] == 30 and any(x["ground_truth"] == 1 for x in r["results"])
-    assert all(0 <= x["risk_score"] <= 99.9 for x in r["results"])
+def test_overview_uses_scored_transactions(h):
+    score(h, amount_inr=150_000)
     o = c.get("/api/overview", headers=h).json()
-    assert o["total"] >= 30 and o["model"]["metrics"]["pr_auc"] > 0.5 and len(o["model"]["banks"]) == 5
+    assert o["total"] >= 1 and o["model"]["metrics"]["pr_auc"] > 0.5 and len(o["model"]["banks"]) == 5
 
 
 # ---------------------------------------------------------------- privacy endpoint and training job

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import { NavLink, Navigate, Route, Routes, useLocation, useNavigate } from "react-router-dom";
 import {
   Activity, BarChart3, BellRing, BookOpen, ChevronDown, Download, FlaskConical, LayoutDashboard, LogOut, Menu, Moon,
@@ -7,16 +7,36 @@ import {
 import { api } from "./services/api";
 import { useAuth, useTheme } from "./context";
 import Login from "./pages/Login.jsx";
-import Profile, { initials } from "./pages/Profile.jsx";
-import Dashboard from "./pages/Dashboard.jsx";
-import LiveMonitor from "./pages/LiveMonitor.jsx";
-import CheckTransaction from "./pages/CheckTransaction.jsx";
-import Datasets from "./pages/Datasets.jsx";
-import Alerts from "./pages/Alerts.jsx";
-import Reports from "./pages/Reports.jsx";
-import FederatedLab from "./pages/FederatedLab.jsx";
-import ModelInsights from "./pages/ModelInsights.jsx";
-import Research from "./pages/Research.jsx";
+
+const PAGE_LOADERS = {
+  "/": () => import("./pages/Dashboard.jsx"),
+  "/monitor": () => import("./pages/LiveMonitor.jsx"),
+  "/check": () => import("./pages/CheckTransaction.jsx"),
+  "/upload": () => import("./pages/Datasets.jsx"),
+  "/alerts": () => import("./pages/Alerts.jsx"),
+  "/reports": () => import("./pages/Reports.jsx"),
+  "/lab": () => import("./pages/FederatedLab.jsx"),
+  "/insights": () => import("./pages/ModelInsights.jsx"),
+  "/research": () => import("./pages/Research.jsx"),
+  "/profile": () => import("./pages/Profile.jsx"),
+};
+
+const Dashboard = lazy(PAGE_LOADERS["/"]);
+const LiveMonitor = lazy(PAGE_LOADERS["/monitor"]);
+const CheckTransaction = lazy(PAGE_LOADERS["/check"]);
+const Datasets = lazy(PAGE_LOADERS["/upload"]);
+const Alerts = lazy(PAGE_LOADERS["/alerts"]);
+const Reports = lazy(PAGE_LOADERS["/reports"]);
+const FederatedLab = lazy(PAGE_LOADERS["/lab"]);
+const ModelInsights = lazy(PAGE_LOADERS["/insights"]);
+const Research = lazy(PAGE_LOADERS["/research"]);
+const Profile = lazy(PAGE_LOADERS["/profile"]);
+
+const initials = (name = "") => name.split(/\s+/).filter(Boolean).slice(0, 2).map((part) => part[0].toUpperCase()).join("") || "U";
+
+function RouteLoader() {
+  return <div className="route-loader" role="status" aria-label="Loading page"><i /><span>Loading page…</span></div>;
+}
 
 const NAV = [
   ["/", "Dashboard", LayoutDashboard],
@@ -73,6 +93,18 @@ export default function App() {
   useEffect(() => {
     if (user) api.health().then(setHealth).catch(() => setHealth({ status: "down" }));
   }, [user]);
+  useEffect(() => {
+    if (!user) return undefined;
+    const loaders = Object.values(PAGE_LOADERS);
+    let index = 0;
+    let timer;
+    const prefetchNext = () => {
+      loaders[index++]?.();
+      if (index < loaders.length) timer = window.setTimeout(prefetchNext, 180);
+    };
+    timer = window.setTimeout(prefetchNext, 700);
+    return () => window.clearTimeout(timer);
+  }, [user]);
 
   if (loading) return <div className="splash"><ShieldCheck size={28} /></div>;
   if (!user) return <Login />;
@@ -87,7 +119,8 @@ export default function App() {
         </div>
         <nav>
           {NAV.map(([to, label, Icon]) => (
-            <NavLink key={to} to={to} end={to === "/"} className={({ isActive }) => (isActive ? "on" : "")}>
+            <NavLink key={to} to={to} end={to === "/"} className={({ isActive }) => (isActive ? "on" : "")}
+              onMouseEnter={() => PAGE_LOADERS[to]()} onFocus={() => PAGE_LOADERS[to]() }>
               <Icon size={18} /> {label}
             </NavLink>
           ))}
@@ -110,19 +143,21 @@ export default function App() {
           <ProfileMenu />
         </header>
         <main className="main">
-          <Routes>
-            <Route path="/" element={<Dashboard />} />
-            <Route path="/monitor" element={<LiveMonitor />} />
-            <Route path="/check" element={<CheckTransaction />} />
-            <Route path="/upload" element={<Datasets />} />
-            <Route path="/alerts" element={<Alerts />} />
-            <Route path="/reports" element={<Reports />} />
-            <Route path="/lab" element={<FederatedLab />} />
-            <Route path="/insights" element={<ModelInsights />} />
-            <Route path="/research" element={<Research />} />
-            <Route path="/profile" element={<Profile />} />
-            <Route path="*" element={<Navigate to="/" replace />} />
-          </Routes>
+          <Suspense fallback={<RouteLoader />}>
+            <Routes>
+              <Route path="/" element={<Dashboard />} />
+              <Route path="/monitor" element={<LiveMonitor />} />
+              <Route path="/check" element={<CheckTransaction />} />
+              <Route path="/upload" element={<Datasets />} />
+              <Route path="/alerts" element={<Alerts />} />
+              <Route path="/reports" element={<Reports />} />
+              <Route path="/lab" element={<FederatedLab />} />
+              <Route path="/insights" element={<ModelInsights />} />
+              <Route path="/research" element={<Research />} />
+              <Route path="/profile" element={<Profile />} />
+              <Route path="*" element={<Navigate to="/" replace />} />
+            </Routes>
+          </Suspense>
         </main>
       </div>
     </div>

@@ -1,55 +1,60 @@
-import { useEffect, useRef, useState } from "react";
-import { Play, Pause, Trash2, Zap } from "lucide-react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { Pause, Play, RefreshCw, Trash2 } from "lucide-react";
 import { api, inr } from "../services/api";
 import { Card, ErrorNote, Page, Stat, TxnTable } from "../components/ui";
 
 export default function LiveMonitor() {
   const [rows, setRows] = useState([]);
-  const [running, setRunning] = useState(false);
+  const [running, setRunning] = useState(true);
+  const [loading, setLoading] = useState(true);
   const [err, setErr] = useState("");
   const timer = useRef(null);
 
-  const tick = async (n = 6) => {
+  const refresh = useCallback(async () => {
     try {
-      const r = await api.simulate(n);
-      setRows((old) => [...r.results.reverse(), ...old].slice(0, 150));
+      setRows(await api.transactions({ limit: 150 }));
       setErr("");
-    } catch (e) { setErr(e.message); setRunning(false); }
-  };
-  useEffect(() => {
-    api.transactions({ limit: 50 }).then(setRows).catch((e) => setErr(e.message));
+    } catch (error) {
+      setErr(error.message);
+      setRunning(false);
+    } finally {
+      setLoading(false);
+    }
   }, []);
-  useEffect(() => {
-    if (running) timer.current = setInterval(() => tick(4), 2500);
-    return () => clearInterval(timer.current);
-  }, [running]);
 
-  const withTruth = rows.filter((r) => r.ground_truth !== null && r.ground_truth !== undefined);
-  const caught = withTruth.filter((r) => r.ground_truth === 1 && r.decision !== "ALLOW").length;
-  const fraudTotal = withTruth.filter((r) => r.ground_truth === 1).length;
-  const falseAlarms = withTruth.filter((r) => r.ground_truth === 0 && r.decision !== "ALLOW").length;
-  const blocked = rows.filter((r) => r.decision === "BLOCK");
+  useEffect(() => { refresh(); }, [refresh]);
+  useEffect(() => {
+    clearInterval(timer.current);
+    if (running) timer.current = setInterval(refresh, 3000);
+    return () => clearInterval(timer.current);
+  }, [refresh, running]);
+
+  const flagged = rows.filter((row) => row.decision !== "ALLOW");
+  const blocked = rows.filter((row) => row.decision === "BLOCK");
+  const confirmed = rows.filter((row) => row.status === "confirmed_fraud");
 
   return (
     <Page
       title="Live monitor"
-      sub="Simulated UPI traffic from five banks, scored in real time by the federated model. Click a row to see why."
+      sub="Recent transactions from uploads and API checks. No generated or predefined transactions are inserted."
       actions={<>
-        <button className="btn ghost" onClick={() => tick(20)}><Zap size={16} /> Burst of 20</button>
-        <button className={`btn ${running ? "red" : ""}`} onClick={() => setRunning(!running)}>
-          {running ? <><Pause size={16} /> Pause</> : <><Play size={16} /> Simulate traffic</>}
+        <button className="btn ghost" onClick={refresh} disabled={loading}><RefreshCw size={16} /> Refresh</button>
+        <button className="btn" onClick={() => setRunning((value) => !value)}>
+          {running ? <><Pause size={16} /> Pause updates</> : <><Play size={16} /> Resume updates</>}
         </button>
         <button className="btn ghost" onClick={async () => { await api.clear(); setRows([]); }}><Trash2 size={16} /> Clear</button>
       </>}
     >
       <ErrorNote error={err} />
       <div className="grid stats">
-        <Stat label="Scored" value={rows.length} />
-        <Stat label="Fraud caught" value={`${caught} / ${fraudTotal}`} tone="green" sub="simulation ground truth" />
-        <Stat label="False alarms" value={falseAlarms} tone="amber" />
-        <Stat label="High-risk value" value={inr(blocked.reduce((a, r) => a + r.amount, 0))} tone="red" />
+        <Stat label="Recent transactions" value={rows.length} sub={running ? "refreshes every 3 seconds" : "updates paused"} />
+        <Stat label="Flagged" value={flagged.length} tone="amber" sub="moderate and high risk" />
+        <Stat label="Confirmed fraud" value={confirmed.length} tone="red" sub="analyst-confirmed cases" />
+        <Stat label="High-risk value" value={inr(blocked.reduce((sum, row) => sum + row.amount, 0))} tone="red" />
       </div>
-      <Card title="Transaction feed"><TxnTable rows={rows} /></Card>
+      <Card title="Transaction feed" hint={loading ? "Loading…" : "Uploaded and API-scored transactions only"}>
+        <TxnTable rows={rows} />
+      </Card>
     </Page>
   );
 }

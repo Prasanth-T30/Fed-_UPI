@@ -31,7 +31,7 @@ class Txn(Base):
     decision = Column(String, index=True)
     reasons = Column(JSON)
     features = Column(JSON)
-    ground_truth = Column(Integer, nullable=True)     # only known for simulated data
+    ground_truth = Column(Integer, nullable=True)     # known when an uploaded dataset includes a fraud label
     status = Column(String, default="open", index=True)  # open | confirmed_fraud | dismissed | auto
     dataset_id = Column(Integer, nullable=True, index=True)
     sender_id = Column(String, nullable=True, index=True)
@@ -74,6 +74,12 @@ def _migrate():
         if name not in cols:
             with engine.begin() as c:
                 c.execute(text(f"ALTER TABLE scored_transactions ADD COLUMN {name} {typ}"))
+    # Cover the filters and ordering used by the dashboard, alerts and reports.
+    # IF NOT EXISTS keeps startup cheap after the first migration.
+    with engine.begin() as c:
+        c.execute(text("CREATE INDEX IF NOT EXISTS ix_txn_truth_decision ON scored_transactions (ground_truth, decision)"))
+        c.execute(text("CREATE INDEX IF NOT EXISTS ix_txn_status_id ON scored_transactions (status, id DESC)"))
+        c.execute(text("CREATE INDEX IF NOT EXISTS ix_txn_decision_id ON scored_transactions (decision, id DESC)"))
 
 
 _migrate()
@@ -136,6 +142,15 @@ def list_datasets(owner_id):
         return [dataset_dict(d) for d in rows]
 
 
+def latest_dataset(owner_id):
+    """Return the user's newest uploaded dataset and its private storage name."""
+    with Session() as s:
+        d = s.execute(
+            select(Dataset).where(Dataset.owner_id == owner_id).order_by(Dataset.id.desc()).limit(1)
+        ).scalar_one_or_none()
+        return (dataset_dict(d), d.stored_as) if d else (None, None)
+
+
 def get_dataset(owner_id, dataset_id):
     with Session() as s:
         d = s.get(Dataset, dataset_id)
@@ -171,15 +186,19 @@ def query_rows(decisions=None, status=None, dataset_id=None, limit=20000):
         return [row_dict(r) for r in s.execute(q.limit(limit)).scalars().all()]
 
 
-def row_dict(t: Txn) -> dict:
-    return {
+def row_dict(t: Txn, compact: bool = False) -> dict:
+    row = {
         "id": t.id, "txn_ref": t.txn_ref, "created_at": t.created_at.isoformat() + "Z", "source": t.source,
         "bank": t.bank, "category": t.category, "amount": t.amount, "risk_score": t.risk_score,
         "risk_level": t.risk_level, "decision": t.decision, "reasons": t.reasons or [],
-        "features": t.features, "ground_truth": t.ground_truth, "status": t.status, "dataset_id": t.dataset_id,
-        "sender_id": t.sender_id, "receiver_id": t.receiver_id,
-        "txn_time": t.txn_time.isoformat() if t.txn_time else None,
+        "ground_truth": t.ground_truth, "status": t.status, "dataset_id": t.dataset_id,
     }
+    if not compact:
+        row.update({
+            "features": t.features, "sender_id": t.sender_id, "receiver_id": t.receiver_id,
+            "txn_time": t.txn_time.isoformat() if t.txn_time else None,
+        })
+    return row
 
 
 def save(records: list) -> list:
@@ -195,15 +214,16 @@ def save(records: list) -> list:
 
 def overview() -> dict:
     with Session() as s:
+        # Keep the indexed dashboard counters independent. SQLite can answer these
+        # from the compact decision/status indexes without scanning JSON-heavy rows.
         total = s.scalar(select(func.count(Txn.id))) or 0
         by_dec = dict(s.execute(select(Txn.decision, func.count(Txn.id)).group_by(Txn.decision)).all())
         blocked_amt = s.scalar(select(func.coalesce(func.sum(Txn.amount), 0)).where(Txn.decision == "BLOCK")) or 0
         open_alerts = s.scalar(select(func.count(Txn.id)).where(Txn.status == "open")) or 0
         confirmed = s.scalar(select(func.count(Txn.id)).where(Txn.status == "confirmed_fraud")) or 0
         recent = s.execute(select(Txn).order_by(Txn.id.desc()).limit(60)).scalars().all()
-        # Aggregate in SQLite instead of materialising every simulated transaction.
-        # Large uploads can contain hundreds of thousands of JSON-heavy rows; loading
-        # them all here made the dashboard request stall and could exhaust VS Code RAM.
+        # Aggregate simulation results in SQL. Never materialise the full table:
+        # transaction rows contain large JSON feature and explanation fields.
         sim_counts = s.execute(
             select(Txn.ground_truth, Txn.decision, func.count(Txn.id))
             .where(Txn.ground_truth.is_not(None))
@@ -216,7 +236,7 @@ def overview() -> dict:
         "total": total, "blocked": by_dec.get("BLOCK", 0), "step_up": by_dec.get("STEP_UP_AUTH", 0),
         "allowed": by_dec.get("ALLOW", 0), "blocked_amount": round(float(blocked_amt), 2),
         "open_alerts": open_alerts, "confirmed_fraud": confirmed,
-        "live_accuracy": {"caught": tp, "missed": fn, "false_alarms": fp},
+        "label_accuracy": {"caught": tp, "missed": fn, "false_alarms": fp},
         "recent": [{"id": t.id, "risk_score": t.risk_score, "decision": t.decision, "amount": t.amount,
                     "created_at": t.created_at.isoformat() + "Z"} for t in reversed(recent)],
     }
@@ -230,7 +250,7 @@ def listing(decision=None, status=None, limit=100, offset=0):
         if status:
             q = q.where(Txn.status == status)
         rows = s.execute(q.limit(limit).offset(offset)).scalars().all()
-        return [row_dict(r) for r in rows]
+        return [row_dict(r, compact=True) for r in rows]
 
 
 def set_status(txn_id: int, status: str):

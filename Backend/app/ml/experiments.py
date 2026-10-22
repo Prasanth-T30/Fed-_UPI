@@ -166,7 +166,7 @@ def run_pipeline(df: pd.DataFrame, cfg: FedConfig, progress: Progress = None, fu
             "train": len(sp["train"]), "val": len(sp["val"]), "test": len(sp["test"]),
             "banks": [{"bank": c.name, "rows": c.n, "fraud": int(c.y.sum()),
                        "fraud_rate": round(float(c.y.mean()), 4)} for c in clients],
-            "note": "Synthetic UPI-style data (no public labelled real UPI fraud set exists).",
+            "note": "Metrics are calculated from the explicitly supplied labelled training dataset.",
         },
         "experiments": experiments,
         "final": {

@@ -65,7 +65,6 @@ export const api = {
     if (status) q.set("status", status);
     return download(`/export/flagged?${q}`, `fedupi-flagged.${format}`);
   },
-  simulate: (n = 25) => req(`/simulate?n=${n}`, { method: "POST" }),
   transactions: (q = {}) => req(`/transactions?${new URLSearchParams(q)}`),
   setStatus: (id, status) => req(`/transactions/${id}`, json("PATCH", { status })),
   clear: () => req("/transactions", { method: "DELETE" }),

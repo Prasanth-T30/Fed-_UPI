@@ -44,7 +44,7 @@ export default function Research() {
       </Card>
       <Card title="Honest limitations">
         <ul className="small plain">
-          <li>The dataset is synthetic; no labelled real UPI fraud data is public. Metrics demonstrate the method, not real-world accuracy.</li>
+          <li>Model quality depends on the coverage and accuracy of the labelled dataset supplied for training.</li>
           <li>Model updates can leak information. Secure aggregation and a formal DP budget (ε) are future work.</li>
           <li>The scoring API receives transaction signals in clear; this is a bank-side deployment, not private inference.</li>
         </ul>

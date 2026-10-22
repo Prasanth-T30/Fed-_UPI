@@ -87,8 +87,8 @@ export default function Dashboard() {
   const metrics = model?.metrics;
   const totalFlagged = o.blocked + o.step_up;
   const flaggedRate = o.total ? totalFlagged / o.total : 0;
-  const simulatedFraud = o.live_accuracy.caught + o.live_accuracy.missed;
-  const captureRate = simulatedFraud ? o.live_accuracy.caught / simulatedFraud : 0;
+  const labelledFraud = o.label_accuracy.caught + o.label_accuracy.missed;
+  const captureRate = labelledFraud ? o.label_accuracy.caught / labelledFraud : 0;
   const riskMix = [
     { name: "Low", value: o.allowed, color: "var(--green)" },
     { name: "Moderate", value: o.step_up, color: "var(--amber)" },
@@ -162,8 +162,8 @@ export default function Dashboard() {
         <Card title="Detection health" hint="Current operational indicators">
           <div className="health-list">
             <div><span><CheckCircle2 size={17} /> Model status</span><b className={model ? "good-text" : "warn-text"}>{model ? "Ready" : "Unavailable"}</b></div>
-            <div><span>Simulation fraud capture</span><b>{simulatedFraud ? pct(captureRate) : "No simulation data"}</b></div>
-            <div><span>False alarms observed</span><b>{o.live_accuracy.false_alarms.toLocaleString()}</b></div>
+            <div><span>Labelled fraud capture</span><b>{labelledFraud ? pct(captureRate) : "No labelled data"}</b></div>
+            <div><span>False alarms observed</span><b>{o.label_accuracy.false_alarms.toLocaleString()}</b></div>
             <div><span>Model version</span><b className="mono">{model?.version || "—"}</b></div>
           </div>
         </Card>

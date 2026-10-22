@@ -4,7 +4,6 @@ import io
 import json
 from typing import Literal, Optional
 
-import numpy as np
 import pandas as pd
 from fastapi import APIRouter, Depends, File, HTTPException, Response, UploadFile
 from pydantic import BaseModel, Field
@@ -14,7 +13,6 @@ import datetime as dt
 
 from app.data import behavior
 from app.data.features import OPTIONAL, REQUIRED
-from app.data.generator import CATEGORIES, generate
 from app.ml.federated import FedConfig
 from app.services import datasets, exports, store, training
 from app.services.auth import current_user
@@ -69,7 +67,7 @@ class TxnIn(BaseModel):
     is_collect_request: Literal[0, 1] = 0
     is_weekend: Literal[0, 1] = 0
     merchant_category: Literal["p2p", "merchant", "investment"] = "p2p"
-    bank: str = "Bank A"
+    bank: str = "-"
     sender_id: str = Field("", max_length=60)             # with receiver_id: repeat history is read from stored payments
     receiver_id: str = Field("", max_length=60)
     sender_txn_24h: int = Field(0, ge=0)                  # manual override / extra known history
@@ -242,27 +240,6 @@ def export_flagged(format: str = "csv", dataset_id: Optional[int] = None, decisi
     return Response(data, media_type=media, headers={"Content-Disposition": f'attachment; filename="{name}"'})
 
 
-@router.post("/simulate")
-def simulate(n: int = 25, seed: Optional[int] = None):
-    """Draw n transactions from the UPI generator and score them (live-monitor demo)."""
-    _ensure()
-    n = max(1, min(n, 200))
-    rng = np.random.default_rng(seed)
-    from app.data.paysim import SAMPLE_PATH
-    if service.meta.get("dataset") == "paysim" and SAMPLE_PATH.exists():
-        pool = pd.read_csv(SAMPLE_PATH).sample(20000, random_state=int(rng.integers(1 << 30)))
-        pool = pd.concat([pool, pd.read_csv(SAMPLE_PATH).query("is_fraud == 1").head(200)]).drop_duplicates("transaction_id")
-    else:
-        pool = generate(seed=int(rng.integers(1 << 30)), scale=0.05)
-    # over-sample fraud so the demo is interesting (real fraud is ~3%)
-    fr = pool[pool.is_fraud == 1].sample(min(max(1, n // 5), int(pool.is_fraud.sum())), random_state=int(rng.integers(1 << 30)))
-    lg = pool[pool.is_fraud == 0].sample(n - len(fr), random_state=int(rng.integers(1 << 30)))
-    df = pd.concat([fr, lg]).sample(frac=1, random_state=int(rng.integers(1 << 30))).reset_index(drop=True)
-    res = service.score(df)
-    saved = _persist(df, res, "simulation", df.is_fraud.to_numpy())
-    return {"count": len(saved), "results": saved}
-
-
 @router.get("/transactions")
 def transactions(decision: Optional[str] = None, status: Optional[str] = None, limit: int = 100, offset: int = 0):
     return store.listing(decision, status, min(limit, 500), offset)
@@ -299,11 +276,11 @@ def fed_status():
 
 
 @router.post("/federated/train")
-def fed_train(body: TrainIn):
+def fed_train(body: TrainIn, user: dict = Depends(current_user)):
     cfg = FedConfig(algorithm=body.algorithm, rounds=body.rounds, local_epochs=body.local_epochs, lr=body.lr,
                     mu=body.mu, dp_clip=body.dp_clip, dp_noise=body.dp_noise, secure_agg=body.secure_agg,
                     dp_delta=body.dp_delta)
-    if not training.start(cfg, body.promote, body.full_comparison):
+    if not training.start(cfg, body.promote, body.full_comparison, user["id"]):
         raise HTTPException(409, "A training job is already running.")
     return {"started": True}
 
@@ -320,7 +297,5 @@ def privacy_epsilon(noise: float, rounds: int, delta: float = 1e-5):
 def papers():
     return PAPERS
 
+# End of API routes.
 
-@router.get("/categories")
-def categories():
-    return CATEGORIES
