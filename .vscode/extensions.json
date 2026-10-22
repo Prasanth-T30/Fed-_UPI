@@ -1,0 +1,15 @@
+{
+  "recommendations": [
+    "ms-python.python",
+    "ms-python.vscode-pylance",
+    "ms-python.debugpy",
+    "ms-python.black-formatter",
+    "ms-python.isort",
+    "ms-python.flake8",
+    "ms-python.mypy-type-checker",
+    "charliermarsh.ruff",
+    "ms-toolsai.jupyter",
+    "kevinrose.vsc-python-indent",
+    "njpwerner.autodocstring"
+  ]
+}
