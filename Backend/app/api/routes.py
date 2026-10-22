@@ -159,15 +159,8 @@ def score_one(t: TxnIn):
 
 def _score_dataset(df: pd.DataFrame, dataset_id: int):
     _ensure()
-    missing = [c for c in REQUIRED if c not in df.columns]
-    if missing:
-        raise HTTPException(400, f"Missing columns: {', '.join(missing)}")
     try:
-        df = df.copy()
-        df["merchant_category"] = df["merchant_category"].astype(str).str.lower().str.strip()
-        bad = sorted(set(df["merchant_category"]) - set(CATEGORIES))
-        if bad:
-            raise ValueError(f"Unsupported merchant_category {bad[:5]}; only {', '.join(CATEGORIES)} are supported")
+        df = datasets.normalize_transactions(df)
         df = behavior.compute(df)       # repeat-payment features from sender_id / receiver_id / timestamp
         res = service.score(df, explain=True)
     except Exception as e:
@@ -187,14 +180,11 @@ async def upload_dataset(file: UploadFile = File(...), user: dict = Depends(curr
     """Store the uploaded file in the dataset library and score it immediately."""
     raw = await file.read()
     if len(raw) > datasets.MAX_BYTES:
-        raise HTTPException(413, "File larger than 10 MB.")
+        raise HTTPException(413, "File larger than 300 MB.")
     try:
         df = datasets.parse(file.filename or "upload", raw)
     except Exception as e:
         raise HTTPException(400, f"Could not read file: {e}")
-    missing = [c for c in REQUIRED if c not in df.columns]
-    if missing:
-        raise HTTPException(400, f"Missing columns: {', '.join(missing)}")
     stored = datasets.save_file(file.filename or "upload", raw)
     ds_id = store.add_dataset(user["id"], file.filename, stored, len(raw), len(df), list(df.columns))
     try:

@@ -13,7 +13,7 @@ from sklearn.metrics import precision_recall_curve
 from app.data.features import FEATURES, transform
 from app.ml.explain import attributions
 from app.ml.federated import Client, FedConfig, run_federation, scores
-from app.ml.metrics import best_threshold, evaluate
+from app.ml.metrics import best_threshold, evaluate, recall_threshold
 from app.ml import policy
 from app.ml.privacy import epsilon
 
@@ -80,7 +80,8 @@ def run_pipeline(df: pd.DataFrame, cfg: FedConfig, progress: Progress = None, fu
         if f > best_f + 1e-9:
             best_w, best_f = w, f
     ens = lambda x: (1 - best_w) * scores(main_model, "clf", x) + best_w * ae_norm(ae_model, x, scale)
-    thr = best_threshold(yva, ens(xva))
+    # Keep a validation margin so recall remains robust on unseen bank/upload distributions.
+    thr = recall_threshold(yva, ens(xva), minimum_recall=0.75)
     experiments["ensemble"] = {"label": "Federated MLP + Autoencoder", "metrics": evaluate(yte, ens(xte), thr)}
     ae_only_thr = best_threshold(yva, scores(ae_model, "ae", xva))
     experiments["autoencoder"] = {"label": "Federated Autoencoder (unsupervised)",

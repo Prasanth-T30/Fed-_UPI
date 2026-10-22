@@ -6,7 +6,7 @@ from fastapi.testclient import TestClient
 from app.data.features import FEATURES, transform
 from app.data.generator import generate
 from app.ml.federated import Client, FedConfig, aggregate, make_model, run_federation
-from app.ml.metrics import best_threshold, evaluate
+from app.ml.metrics import best_threshold, evaluate, recall_threshold
 
 
 @pytest.fixture(scope="module")
@@ -46,6 +46,14 @@ def test_metrics():
     y = np.array([0, 0, 1, 1]); s = np.array([0.1, 0.4, 0.35, 0.8])
     m = evaluate(y, s, best_threshold(y, s))
     assert 0 <= m["f1"] <= 1 and m["tp"] + m["fn"] == 2
+
+
+def test_recall_threshold_meets_target_and_prefers_highest_cutoff():
+    y = np.array([1, 0, 1, 1, 0])
+    s = np.array([0.9, 0.8, 0.7, 0.4, 0.2])
+    threshold = recall_threshold(y, s, minimum_recall=2 / 3)
+    assert threshold == 0.7
+    assert (y[s >= threshold].sum() / y.sum()) >= 2 / 3
 
 
 

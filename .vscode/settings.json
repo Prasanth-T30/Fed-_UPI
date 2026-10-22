@@ -1,0 +1,57 @@
+{
+  "files.watcherExclude": {
+    "**/.git/objects/**": true,
+    "**/.mypy_cache/**": true,
+    "**/.pytest_cache/**": true,
+    "**/.ruff_cache/**": true,
+    "**/__pycache__/**": true,
+    "**/Backend/.venv/**": true,
+    "**/Frontend/node_modules/**": true,
+    "**/Frontend/dist/**": true,
+    "**/Backend/storage/**": true,
+    "**/Backend/*.db": true,
+    "**/Backend/*.db-*": true,
+    "**/Backend/artifacts/**": true,
+    "**/Backend/data/*.csv": true,
+    "**/*.log": true
+  },
+  "search.exclude": {
+    "**/.mypy_cache": true,
+    "**/.pytest_cache": true,
+    "**/.ruff_cache": true,
+    "**/__pycache__": true,
+    "**/Backend/.venv": true,
+    "**/Frontend/node_modules": true,
+    "**/Backend/storage": true,
+    "**/Backend/*.db": true,
+    "**/Backend/*.db-*": true,
+    "**/Backend/artifacts": true,
+    "**/Backend/data/*.csv": true,
+    "**/Frontend/dist": true
+  },
+  "python.analysis.exclude": [
+    "**/.mypy_cache/**",
+    "**/.pytest_cache/**",
+    "**/.ruff_cache/**",
+    "**/__pycache__/**",
+    "**/.venv/**",
+    "**/node_modules/**",
+    "**/Backend/storage/**",
+    "**/Backend/artifacts/**",
+    "**/Backend/data/**"
+  ],
+  "python.analysis.diagnosticMode": "openFilesOnly",
+  "python.analysis.indexing": false,
+  "python.analysis.typeCheckingMode": "off",
+  "python.analysis.autoImportCompletions": false,
+  "search.followSymlinks": false,
+  "terminal.integrated.gpuAcceleration": "off",
+  "terminal.integrated.scrollback": 1000,
+  "editor.minimap.enabled": false,
+  "files.exclude": {
+    "**/.mypy_cache": true,
+    "**/.pytest_cache": true,
+    "**/.ruff_cache": true,
+    "**/__pycache__": true
+  }
+}

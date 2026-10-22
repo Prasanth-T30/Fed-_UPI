@@ -13,6 +13,7 @@ from fastapi.testclient import TestClient
 from openpyxl import load_workbook
 
 from app.main import app
+from app.services import datasets
 from app.services.scoring import service
 
 c = TestClient(app)
@@ -138,17 +139,44 @@ def test_upload_every_supported_format(h, fmt):
     c.delete(f"/api/datasets/{body['dataset']['id']}", headers=h)
 
 
-@pytest.mark.parametrize("name,kind,code", [("virus.exe", "exe", 400), ("empty.csv", "empty", 400), ("bad.xlsx", "junk", 400),
-                                           ("cols.csv", "columns", 400), ("big.csv", "huge", 413)])
+@pytest.mark.parametrize("name,kind,code", [("virus.exe", "exe", 400), ("empty.csv", "empty", 400), ("bad.xlsx", "junk", 400)])
 def test_bad_uploads_rejected(h, name, kind, code):
-    data = {"exe": b"MZ", "empty": b"", "junk": b"not an excel file", "columns": b"a,b\n1,2\n", "huge": b"x" * 10_100_000}[kind]
+    data = {"exe": b"MZ", "empty": b"", "junk": b"not an excel file"}[kind]
     assert upload(h, name, data).status_code == code
 
 
-def test_unsupported_category_in_file(h):
+def test_upload_size_limit(h, monkeypatch):
+    monkeypatch.setattr(datasets, "MAX_BYTES", 10)
+    r = upload(h, "big.csv", b"x" * 11)
+    assert r.status_code == 413 and "300 MB" in r.text
+
+
+def test_dataset_parser_has_no_row_count_limit():
+    data = ("value\n" + "1\n" * 20_001).encode()
+    assert len(datasets.parse("large.csv", data)) == 20_001
+
+
+def test_unknown_category_is_adapted(h):
     df = demo_df(); df.loc[0, "merchant_category"] = "food"
     r = upload(h, "cat.csv", df.to_csv(index=False).encode())
-    assert r.status_code == 400 and "merchant_category" in r.text
+    assert r.status_code == 200
+    c.delete(f"/api/datasets/{r.json()['dataset']['id']}", headers=h)
+
+
+def test_upload_adapts_common_column_names_and_unknown_extension(h):
+    data = b"transaction_amount,transaction_time,user_id,payee,type\n500,2026-08-01 10:00:00,U1,R1,transfer\n85000,2026-08-01 10:10:00,U1,R1,payment\n"
+    r = upload(h, "transactions.dat", data)
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert body["rows"] == 2 and body["counts"].get("STEP_UP_AUTH", 0) >= 1
+    c.delete(f"/api/datasets/{body['dataset']['id']}", headers=h)
+
+
+def test_upload_accepts_arbitrary_columns_with_neutral_defaults(h):
+    r = upload(h, "custom.csv", b"customer_note,reference\nnormal payment,A1\nreview payment,A2\n")
+    assert r.status_code == 200, r.text
+    assert r.json()["rows"] == 2
+    c.delete(f"/api/datasets/{r.json()['dataset']['id']}", headers=h)
 
 
 def test_path_traversal_filename_is_harmless(h):
@@ -194,7 +222,9 @@ def export(h, ds, fmt, **q):
 def test_export_xlsx_is_readable(h, dataset):
     r = export(h, dataset, "xlsx")
     ws = load_workbook(io.BytesIO(r.content)).active
-    assert ws.max_row > 5 and ws.cell(1, 1).value == "Reference" and ws.cell(1, 6).value == "Risk %"
+    assert ws.max_row > 5 and ws.max_column == 6
+    assert ws.cell(1, 1).value == "Reference" and ws.cell(1, 4).value == "Risk %"
+    assert ws.freeze_panes == "A2" and ws.auto_filter.ref == ws.dimensions
 
 
 def test_export_docx_is_readable(h, dataset):
@@ -205,14 +235,17 @@ def test_export_docx_is_readable(h, dataset):
 def test_export_pdf_csv_json(h, dataset):
     assert export(h, dataset, "pdf").content[:5] == b"%PDF-"
     csv = export(h, dataset, "csv").content.decode("utf-8-sig")
-    assert csv.splitlines()[0].startswith("Reference,Time (UTC),Bank")
+    assert csv.splitlines()[0].startswith("Reference,Transaction time (UTC),Amount (INR),Risk %")
     rows = export(h, dataset, "json").json()
     assert rows and all(x["decision"] != "ALLOW" for x in rows)
+    assert set(rows[0]) == {"reference", "time_utc", "amount_inr", "risk_percent", "decision", "why_flagged"}
+    assert rows[0]["decision"] == "BLOCK"
+    assert rows == sorted(rows, key=lambda x: ({"BLOCK": 0, "STEP_UP_AUTH": 1}[x["decision"]], -x["risk_percent"]))
 
 
 def test_export_filters(h, dataset):
     high = export(h, dataset, "json", decision="BLOCK").json()
-    assert high and all(x["decision"] == "BLOCK" and x["amount"] >= 100_000 for x in high)
+    assert high and all(x["decision"] == "BLOCK" and x["amount_inr"] >= 100_000 for x in high)
     mod = export(h, dataset, "json", decision="STEP_UP_AUTH").json()
     assert mod and all(x["decision"] == "STEP_UP_AUTH" for x in mod)
     assert export(h, dataset, "exe").status_code == 400

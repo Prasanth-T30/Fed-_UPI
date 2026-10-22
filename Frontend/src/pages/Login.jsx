@@ -8,14 +8,20 @@ export default function Login() {
   const [mode, setMode] = useState("login");
   const [f, setF] = useState({ name: "", email: "", password: "", organization: "" });
   const [err, setErr] = useState("");
+  const [notice, setNotice] = useState("");
   const [busy, setBusy] = useState(false);
   const set = (k) => (e) => setF({ ...f, [k]: e.target.value });
 
   const submit = async (e) => {
-    e.preventDefault(); setBusy(true); setErr("");
+    e.preventDefault(); setBusy(true); setErr(""); setNotice("");
     try {
       if (mode === "login") await login({ email: f.email, password: f.password });
-      else await register(f);
+      else {
+        await register(f);
+        setF((current) => ({ ...current, name: "", organization: "", password: "" }));
+        setMode("login");
+        setNotice("Account created successfully. Sign in to continue.");
+      }
     } catch (x) { setErr(x.message); }
     setBusy(false);
   };
@@ -46,11 +52,12 @@ export default function Login() {
         <label>Password<input type="password" value={f.password} onChange={set("password")} required minLength={mode === "register" ? 8 : 1}
           autoComplete={mode === "login" ? "current-password" : "new-password"} />
           {mode === "register" && <small>At least 8 characters.</small>}</label>
-        {err && <div className="note bad">{err}</div>}
+        {notice && <div className="note good" role="status">{notice}</div>}
+        {err && <div className="note bad" role="alert">{err}</div>}
         <button className="btn wide" disabled={busy}>{busy ? "Please wait…" : mode === "login" ? "Sign in" : "Create account"}</button>
         <p className="switch">
           {mode === "login" ? "New here?" : "Already registered?"}{" "}
-          <a href="#" onClick={(e) => { e.preventDefault(); setErr(""); setMode(mode === "login" ? "register" : "login"); }}>
+          <a href="#" onClick={(e) => { e.preventDefault(); setErr(""); setNotice(""); setMode(mode === "login" ? "register" : "login"); }}>
             {mode === "login" ? "Create an account" : "Sign in"}
           </a>
         </p>

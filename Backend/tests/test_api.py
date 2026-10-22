@@ -60,8 +60,9 @@ def test_upload_export_roundtrip(auth):
         e = c.get(f"/api/export/flagged?format={fmt}&dataset_id={ds['id']}", headers=h)
         assert e.status_code == 200 and e.content.startswith(magic), fmt
     assert c.get("/api/export/flagged?format=exe", headers=h).status_code == 400
-    bad = c.post("/api/datasets", headers=h, files={"file": ("x.csv", b"a,b\n1,2\n")})
-    assert bad.status_code == 400 and "Missing columns" in bad.text
+    flexible = c.post("/api/datasets", headers=h, files={"file": ("x.csv", b"a,b\n1,2\n")})
+    assert flexible.status_code == 200
+    assert c.delete(f"/api/datasets/{flexible.json()['dataset']['id']}", headers=h).status_code == 200
     assert c.delete(f"/api/datasets/{ds['id']}", headers=h).status_code == 200
 
 

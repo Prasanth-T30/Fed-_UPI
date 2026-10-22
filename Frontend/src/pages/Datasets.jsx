@@ -4,7 +4,7 @@ import { api, bytes } from "../services/api";
 import { Card, Empty, ErrorNote, Page, Stat, TxnTable } from "../components/ui";
 import ExportMenu from "../components/ExportMenu";
 
-const COLS = "amount_inr, amount_to_average_ratio, transaction_hour, account_age_days, transactions_last_hour, minutes_since_last_transaction, failed_login_attempts_24h, upi_pin_failures_24h, is_new_device, is_new_beneficiary, is_collect_request, is_weekend, merchant_category";
+const MAX_UPLOAD_BYTES = 300 * 1024 * 1024;
 
 export default function Datasets() {
   const [list, setList] = useState([]);
@@ -13,15 +13,30 @@ export default function Datasets() {
   const [busy, setBusy] = useState("");
   const [drag, setDrag] = useState(false);
   const input = useRef();
+  const uploadLock = useRef(false);
   const load = () => api.datasets().then(setList).catch((e) => setErr(e.message));
   useEffect(() => { load(); }, []);
 
   const send = async (file) => {
-    if (!file) return;
+    if (!file || uploadLock.current) return;
+    uploadLock.current = true;
+    if (file.size > MAX_UPLOAD_BYTES) {
+      setErr("File larger than 300 MB.");
+      if (input.current) input.current.value = "";
+      uploadLock.current = false;
+      return;
+    }
     setBusy("upload"); setErr("");
-    try { setRes(await api.upload(file)); load(); } catch (e) { setErr(e.message); }
-    setBusy("");
-    if (input.current) input.current.value = "";
+    try {
+      setRes(await api.upload(file));
+      load();
+    } catch (e) {
+      setErr(e.message);
+    } finally {
+      uploadLock.current = false;
+      setBusy("");
+      if (input.current) input.current.value = "";
+    }
   };
   const rescore = async (id) => {
     setBusy(`r${id}`); setErr("");
@@ -32,18 +47,19 @@ export default function Datasets() {
     if (!confirm("Delete this dataset and its scored results?")) return;
     try { await api.deleteDataset(id); if (res?.dataset?.id === id) setRes(null); load(); } catch (e) { setErr(e.message); }
   };
+  const uploading = busy === "upload";
 
   return (
-    <Page title="Upload & datasets" sub="Upload Excel, CSV, JSON or Word-table files. They are stored in your library and scored by the federated model straight away.">
+    <Page title="Upload & datasets" sub="Upload a dataset to your library and score it with the federated model straight away.">
       <Card>
-        <div className={`drop ${drag ? "over" : ""}`} onClick={() => input.current.click()}
-          onDragOver={(e) => { e.preventDefault(); setDrag(true); }} onDragLeave={() => setDrag(false)}
-          onDrop={(e) => { e.preventDefault(); setDrag(false); send(e.dataTransfer.files[0]); }}>
+        <div className={`drop ${drag ? "over" : ""} ${uploading ? "uploading" : ""}`}
+          onClick={uploading ? undefined : () => input.current.click()} aria-busy={uploading}
+          onDragOver={(e) => { e.preventDefault(); if (!uploading) setDrag(true); }} onDragLeave={() => setDrag(false)}
+          onDrop={(e) => { e.preventDefault(); setDrag(false); if (!uploading) send(e.dataTransfer.files[0]); }}>
           <Upload size={26} />
-          <b>{busy === "upload" ? "Uploading and scoring…" : "Drop a file here, or click to browse"}</b>
-          <span>.xlsx · .csv · .json · .docx (table) · .tsv — up to 10 MB / 20,000 rows</span>
-          <small>Required columns: {COLS}. Recommended: sender_id, receiver_id, timestamp (to detect repeated payments to the same receiver). Optional: transaction_id, bank, is_fraud. merchant_category must be p2p, merchant or investment.</small>
-          <input ref={input} type="file" hidden accept=".csv,.xlsx,.xlsm,.json,.docx,.txt,.tsv" onChange={(e) => send(e.target.files[0])} />
+          <b>{uploading ? "Uploading and scoring…" : "Drop a file here, or click to browse"}</b>
+          <span>Any file type — up to 300 MB</span>
+          <input ref={input} type="file" hidden disabled={uploading} onChange={(e) => send(e.target.files[0])} />
         </div>
         <ErrorNote error={err} />
       </Card>

@@ -201,10 +201,17 @@ def overview() -> dict:
         open_alerts = s.scalar(select(func.count(Txn.id)).where(Txn.status == "open")) or 0
         confirmed = s.scalar(select(func.count(Txn.id)).where(Txn.status == "confirmed_fraud")) or 0
         recent = s.execute(select(Txn).order_by(Txn.id.desc()).limit(60)).scalars().all()
-        sim = s.execute(select(Txn).where(Txn.ground_truth.is_not(None))).scalars().all()
-    tp = sum(1 for t in sim if t.ground_truth == 1 and t.decision != "ALLOW")
-    fn = sum(1 for t in sim if t.ground_truth == 1 and t.decision == "ALLOW")
-    fp = sum(1 for t in sim if t.ground_truth == 0 and t.decision != "ALLOW")
+        # Aggregate in SQLite instead of materialising every simulated transaction.
+        # Large uploads can contain hundreds of thousands of JSON-heavy rows; loading
+        # them all here made the dashboard request stall and could exhaust VS Code RAM.
+        sim_counts = s.execute(
+            select(Txn.ground_truth, Txn.decision, func.count(Txn.id))
+            .where(Txn.ground_truth.is_not(None))
+            .group_by(Txn.ground_truth, Txn.decision)
+        ).all()
+    tp = sum(count for truth, decision, count in sim_counts if truth == 1 and decision != "ALLOW")
+    fn = sum(count for truth, decision, count in sim_counts if truth == 1 and decision == "ALLOW")
+    fp = sum(count for truth, decision, count in sim_counts if truth == 0 and decision != "ALLOW")
     return {
         "total": total, "blocked": by_dec.get("BLOCK", 0), "step_up": by_dec.get("STEP_UP_AUTH", 0),
         "allowed": by_dec.get("ALLOW", 0), "blocked_amount": round(float(blocked_amt), 2),

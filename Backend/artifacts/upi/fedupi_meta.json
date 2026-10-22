@@ -1,8 +1,8 @@
 {
-  "threshold": 0.7941404581069946,
-  "review_threshold": 0.3971,
-  "ensemble_weight": 0.1,
-  "ae_scale": 0.179254413651062,
+  "threshold": 0.5824775695800781,
+  "review_threshold": 0.2912,
+  "ensemble_weight": 0.3,
+  "ae_scale": 0.2325601885782013,
   "n_features": 22,
   "dataset": "upi"
 }

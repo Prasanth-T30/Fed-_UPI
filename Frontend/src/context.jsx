@@ -40,7 +40,7 @@ export function AuthProvider({ children }) {
   const value = {
     user, loading, logout, setUser,
     login: async (b) => accept(await api.login(b)),
-    register: async (b) => accept(await api.register(b)),
+    register: (b) => api.register(b),
   };
   return <AuthCtx.Provider value={value}>{children}</AuthCtx.Provider>;
 }

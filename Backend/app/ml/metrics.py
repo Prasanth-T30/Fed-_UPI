@@ -14,6 +14,20 @@ def best_threshold(y, s) -> float:
     return float(ss[ends[np.argmax(f1)]])
 
 
+def recall_threshold(y, s, minimum_recall: float = 0.68) -> float:
+    """Highest score cutoff that reaches the requested fraud recall.
+
+    Fraud review prioritises missed-fraud control. Choosing the highest eligible
+    cutoff preserves as much precision as possible at that recall target.
+    """
+    y = np.asarray(y).astype(int)
+    s = np.asarray(s, dtype=float)
+    order = np.argsort(-s, kind="stable")
+    cumulative_recall = np.cumsum(y[order]) / max(int(y.sum()), 1)
+    eligible = np.flatnonzero(cumulative_recall >= minimum_recall)
+    return float(s[order[eligible[0]]]) if len(eligible) else float(s.min())
+
+
 def evaluate(y, s, thr: float) -> dict:
     y = np.asarray(y).astype(int)
     pred = s >= thr

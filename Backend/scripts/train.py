@@ -1,6 +1,7 @@
 """Prepare a dataset, run the full federated experiment suite and save model + report.
 
     python scripts/train.py                      # synthetic UPI data (default)
+    python scripts/train.py --scale 0.25 --quick # lower-memory production training
     python scripts/train.py --dataset paysim     # real public PaySim data (needs data/raw/paysim.zip)
     python scripts/train.py --dataset paysim --no-activate   # keep the current production model
 """
@@ -25,6 +26,8 @@ if __name__ == "__main__":
     ap = argparse.ArgumentParser()
     ap.add_argument("--dataset", choices=["upi", "paysim"], default="upi")
     ap.add_argument("--max-rows", type=int, default=150_000, help="PaySim sample size (all fraud kept)")
+    ap.add_argument("--scale", type=float, default=1.0, help="Synthetic UPI dataset scale")
+    ap.add_argument("--quick", action="store_true", help="Skip comparison-only models; train the production ensemble")
     ap.add_argument("--no-activate", action="store_true")
     ap.add_argument("--use", choices=["upi", "paysim"], help="only switch the production model to a trained dataset")
     a = ap.parse_args()
@@ -41,7 +44,7 @@ if __name__ == "__main__":
         df.to_csv(SAMPLE_PATH, index=False)
         name = "paysim"
     else:
-        df = generate(seed=42)
+        df = generate(seed=42, scale=a.scale)
         df.to_csv(DATASET_PATH, index=False)
         name = "upi"
     print(f"dataset {name}: {len(df)} rows, fraud {df.is_fraud.mean():.2%}")
@@ -50,7 +53,7 @@ if __name__ == "__main__":
         if p.get("round") and (p["round"] % 5 == 0 or p["round"] == 1):
             print(f"  [{p['stage']}] round {p['round']:>2}  f1={p['f1']:.3f} pr_auc={p['pr_auc']:.3f}")
 
-    report, art = run_pipeline(df, FedConfig(secure_agg=True), progress=show, full=True)
+    report, art = run_pipeline(df, FedConfig(secure_agg=True), progress=show, full=not a.quick)
     report["dataset"]["name"] = name
     art["meta"]["dataset"] = name
     out = ARTIFACT_DIR / name
