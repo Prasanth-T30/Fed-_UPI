@@ -5,7 +5,6 @@ from typing import Callable, Optional
 
 import numpy as np
 import pandas as pd
-import torch
 from sklearn.ensemble import HistGradientBoostingClassifier
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import precision_recall_curve
@@ -46,9 +45,15 @@ def ae_norm(model, x, scale):
 def run_pipeline(df: pd.DataFrame, cfg: FedConfig, progress: Progress = None, full: bool = True):
     """full=True runs every baseline (for the research report); False = fast federated run."""
     t0 = time.time()
-    say = lambda stage, **kw: progress and progress({"stage": stage, **kw})
+
+    def say(stage, **details):
+        if progress:
+            progress({"stage": stage, **details})
+
     sp = split_by_bank(df, cfg.seed)
-    xtr, ytr = _xy(sp["train"]); xva, yva = _xy(sp["val"]); xte, yte = _xy(sp["test"])
+    xtr, ytr = _xy(sp["train"])
+    xva, yva = _xy(sp["val"])
+    xte, yte = _xy(sp["test"])
     clients = []
     for bank, g in sp["train"].groupby("bank", sort=True):
         x, y = _xy(g)
@@ -79,10 +84,15 @@ def run_pipeline(df: pd.DataFrame, cfg: FedConfig, progress: Progress = None, fu
         f = evaluate(yva, s, best_threshold(yva, s))["f1"]
         if f > best_f + 1e-9:
             best_w, best_f = w, f
-    ens = lambda x: (1 - best_w) * scores(main_model, "clf", x) + best_w * ae_norm(ae_model, x, scale)
+    def ensemble_scores(x):
+        return (1 - best_w) * scores(main_model, "clf", x) + best_w * ae_norm(ae_model, x, scale)
+
     # Keep a validation margin so recall remains robust on unseen bank/upload distributions.
-    thr = recall_threshold(yva, ens(xva), minimum_recall=0.75)
-    experiments["ensemble"] = {"label": "Federated MLP + Autoencoder", "metrics": evaluate(yte, ens(xte), thr)}
+    thr = recall_threshold(yva, ensemble_scores(xva), minimum_recall=0.75)
+    experiments["ensemble"] = {
+        "label": "Federated MLP + Autoencoder",
+        "metrics": evaluate(yte, ensemble_scores(xte), thr),
+    }
     ae_only_thr = best_threshold(yva, scores(ae_model, "ae", xva))
     experiments["autoencoder"] = {"label": "Federated Autoencoder (unsupervised)",
                                   "metrics": evaluate(yte, scores(ae_model, "ae", xte), ae_only_thr), "history": ae_hist}
@@ -119,11 +129,11 @@ def run_pipeline(df: pd.DataFrame, cfg: FedConfig, progress: Progress = None, fu
             m, _ = fed([c], algorithm="fedavg")
             locs.append({"bank": c.name, **test_metrics(m)})
         keys = ["precision", "recall", "f1", "roc_auc", "pr_auc", "accuracy", "fpr"]
-        avg = {k: round(float(np.mean([l[k] for l in locs])), 4) for k in keys}
+        avg = {k: round(float(np.mean([result[k] for result in locs])), 4) for k in keys}
         experiments["local_only"] = {"label": "Local-only (each bank alone, mean)", "metrics": avg, "per_bank": locs}
 
     # --- final model analytics -----------------------------------------------------------
-    final_scores = ens(xte)
+    final_scores = ensemble_scores(xte)
     review_thr = round(thr * 0.5, 4)
     prec, rec, _ = precision_recall_curve(yte, final_scores)
     step = max(1, len(prec) // 60)

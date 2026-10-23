@@ -1,11 +1,10 @@
 ﻿import numpy as np
 import pytest
 import torch
-from fastapi.testclient import TestClient
 
 from app.data.features import FEATURES, transform
 from app.data.generator import generate
-from app.ml.federated import Client, FedConfig, aggregate, make_model, run_federation
+from app.ml.federated import Client, FedConfig, aggregate, run_federation
 from app.ml.metrics import best_threshold, evaluate, recall_threshold
 
 
@@ -43,7 +42,8 @@ def test_federation_learns(df):
 
 
 def test_metrics():
-    y = np.array([0, 0, 1, 1]); s = np.array([0.1, 0.4, 0.35, 0.8])
+    y = np.array([0, 0, 1, 1])
+    s = np.array([0.1, 0.4, 0.35, 0.8])
     m = evaluate(y, s, best_threshold(y, s))
     assert 0 <= m["f1"] <= 1 and m["tp"] + m["fn"] == 2
 

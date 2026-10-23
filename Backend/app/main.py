@@ -1,25 +1,29 @@
-"""FedUPI - Federated UPI fraud detection API (FastAPI)."""
+"""Flask application for the FedUPI API and built frontend."""
 
-from fastapi import FastAPI
-from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse
-from fastapi.staticfiles import StaticFiles
+from flask import Flask, jsonify, send_from_directory
+from flask_cors import CORS
+from werkzeug.exceptions import HTTPException
 
 from app.api.auth_routes import router as auth_router
 from app.api.routes import public, router
 from app.config import FRONTEND_DIST
 
-app = FastAPI(title="FedUPI", version="2.0")
-app.add_middleware(CORSMiddleware, allow_origins=["http://127.0.0.1:5173", "http://localhost:5173"],
-                   allow_methods=["*"], allow_headers=["*"])
-app.include_router(public)
-app.include_router(auth_router)
-app.include_router(router)
+app = Flask(__name__, static_folder=None)
+CORS(app, origins=["http://127.0.0.1:5173", "http://localhost:5173"])
+app.register_blueprint(public)
+app.register_blueprint(auth_router)
+app.register_blueprint(router)
+
+
+@app.errorhandler(HTTPException)
+def http_error(error):
+    return jsonify(detail=error.description), error.code
 
 if (FRONTEND_DIST / "index.html").exists():
-    app.mount("/assets", StaticFiles(directory=FRONTEND_DIST / "assets"), name="assets")
-
-    @app.get("/{path:path}", include_in_schema=False)
-    def spa(path: str):
-        f = FRONTEND_DIST / path
-        return FileResponse(f if path and f.is_file() else FRONTEND_DIST / "index.html")
+    @app.route("/", defaults={"path": ""})
+    @app.route("/<path:path>")
+    def spa(path):
+        file = FRONTEND_DIST / path
+        if path and file.is_file() and file.resolve().is_relative_to(FRONTEND_DIST.resolve()):
+            return send_from_directory(FRONTEND_DIST, path)
+        return send_from_directory(FRONTEND_DIST, "index.html")

@@ -51,8 +51,10 @@ class ModelService:
             state = torch.load(MODEL_PATH, map_location="cpu")
             n = self.meta["n_features"]
             self.mlp, self.ae = make_model("clf", n), make_model("ae", n)
-            self.mlp.load_state_dict(state["mlp"]); self.ae.load_state_dict(state["ae"])
-            self.mlp.eval(); self.ae.eval()
+            self.mlp.load_state_dict(state["mlp"])
+            self.ae.load_state_dict(state["ae"])
+            self.mlp.eval()
+            self.ae.eval()
             self.ready = True
         return True
 
@@ -77,13 +79,17 @@ class ModelService:
             name = policy.LEVELS[level[i]]
             rules, reasons = [], []
             if trig["high_amount"][i]:
-                rules.append("high_amount"); reasons.append({"reason": f"Amount Rs {amount[i]:,.0f} is above Rs 99,999 (high-value rule)", "weight": None})
+                rules.append("high_amount")
+                reasons.append({"reason": f"Amount Rs {amount[i]:,.0f} is above Rs 99,999 (high-value rule)", "weight": None})
             elif trig["moderate_amount"][i]:
-                rules.append("moderate_amount"); reasons.append({"reason": f"Amount Rs {amount[i]:,.0f} is in the Rs 70,000-99,999 band (moderate-value rule)", "weight": None})
+                rules.append("moderate_amount")
+                reasons.append({"reason": f"Amount Rs {amount[i]:,.0f} is in the Rs 70,000-99,999 band (moderate-value rule)", "weight": None})
             if trig["repeat"][i]:
-                rules.append("repeat_receiver"); reasons.append({"reason": f"Payment #{int(recv[i]) + 1} to the same receiver within 24 hours", "weight": None})
+                rules.append("repeat_receiver")
+                reasons.append({"reason": f"Payment #{int(recv[i]) + 1} to the same receiver within 24 hours", "weight": None})
             if trig["burst"][i]:
-                rules.append("burst"); reasons.append({"reason": f"{int(vel[i])} earlier payments by this user in the last hour", "weight": None})
+                rules.append("burst")
+                reasons.append({"reason": f"{int(vel[i])} earlier payments by this user in the last hour", "weight": None})
             if trig["model"][i]:
                 rules.append("model")
             if explain and level[i] > 0:

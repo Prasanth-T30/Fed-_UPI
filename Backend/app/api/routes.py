@@ -1,16 +1,14 @@
 """REST API."""
 
-import io
 import json
-from typing import Literal, Optional
+from typing import Literal
 
 import pandas as pd
-from fastapi import APIRouter, Depends, File, HTTPException, Response, UploadFile
-from pydantic import BaseModel, Field
+from flask import Blueprint, Response, request
+from pydantic import BaseModel, Field, ValidationError
+from werkzeug.exceptions import BadRequest, Conflict, NotFound, RequestEntityTooLarge, ServiceUnavailable, UnprocessableEntity
 
 from app.config import MODEL_VERSION, REPORT_PATH
-import datetime as dt
-
 from app.data import behavior
 from app.data.features import OPTIONAL, REQUIRED
 from app.ml.federated import FedConfig
@@ -18,8 +16,30 @@ from app.services import datasets, exports, store, training
 from app.services.auth import current_user
 from app.services.scoring import service
 
-router = APIRouter(prefix="/api", dependencies=[Depends(current_user)])
-public = APIRouter(prefix="/api")
+router = Blueprint("api", __name__, url_prefix="/api")
+public = Blueprint("public", __name__, url_prefix="/api")
+
+
+@router.before_request
+def require_login():
+    current_user()
+
+
+def body(model):
+    try:
+        return model.model_validate(request.get_json(silent=True) or {})
+    except ValidationError as error:
+        raise UnprocessableEntity("; ".join(item["msg"] for item in error.errors())) from error
+
+
+def integer_arg(name):
+    value = request.args.get(name)
+    if value is None or value == "":
+        return None
+    try:
+        return int(value)
+    except ValueError as error:
+        raise UnprocessableEntity(f"{name} must be an integer.") from error
 
 PAPERS = [
     {"title": "Communication-Efficient Learning of Deep Networks from Decentralized Data (FedAvg)",
@@ -92,7 +112,7 @@ class TrainIn(BaseModel):
 
 def _ensure():
     if not service.ready:
-        raise HTTPException(503, "Model not trained yet. Run `python scripts/train.py` or use the Federated Lab.")
+        raise ServiceUnavailable("Model not trained yet. Run `python scripts/train.py` or use the Federated Lab.")
 
 
 def _when(r):
@@ -138,8 +158,9 @@ def overview():
 
 
 @router.post("/transactions/score")
-def score_one(t: TxnIn):
+def score_one():
     _ensure()
+    t = body(TxnIn)
     row = t.model_dump()
     now = store._utcnow()
     hist = store.history_counts(row["sender_id"], row["receiver_id"], now)
@@ -162,7 +183,7 @@ def _score_dataset(df: pd.DataFrame, dataset_id: int):
         df = behavior.compute(df)       # repeat-payment features from sender_id / receiver_id / timestamp
         res = service.score(df, explain=True)
     except Exception as e:
-        raise HTTPException(400, f"Invalid data: {e}")
+        raise BadRequest(f"Invalid data: {e}") from e
     truth = None
     if "is_fraud" in df.columns:
         truth = pd.to_numeric(df["is_fraud"], errors="coerce").fillna(0).to_numpy()
@@ -174,86 +195,102 @@ def _score_dataset(df: pd.DataFrame, dataset_id: int):
 
 
 @router.post("/datasets")
-async def upload_dataset(file: UploadFile = File(...), user: dict = Depends(current_user)):
+def upload_dataset():
     """Store the uploaded file in the dataset library and score it immediately."""
-    raw = await file.read()
+    user = current_user()
+    file = request.files.get("file")
+    if file is None:
+        raise UnprocessableEntity("Choose a file to upload.")
+    raw = file.read(datasets.MAX_BYTES + 1)
     if len(raw) > datasets.MAX_BYTES:
-        raise HTTPException(413, "File larger than 300 MB.")
+        raise RequestEntityTooLarge("File larger than 300 MB.")
     try:
         df = datasets.parse(file.filename or "upload", raw)
     except Exception as e:
-        raise HTTPException(400, f"Could not read file: {e}")
+        raise BadRequest(f"Could not read file: {e}") from e
     stored = datasets.save_file(file.filename or "upload", raw)
     ds_id = store.add_dataset(user["id"], file.filename, stored, len(raw), len(df), list(df.columns))
     try:
         out = _score_dataset(df, ds_id)
-    except HTTPException:
-        datasets.remove_file(stored); store.delete_dataset(user["id"], ds_id)
+    except Exception:
+        datasets.remove_file(stored)
+        store.delete_dataset(user["id"], ds_id)
         raise
     ds, _ = store.get_dataset(user["id"], ds_id)
     return {"dataset": ds, **out}
 
 
 @router.get("/datasets")
-def list_datasets(user: dict = Depends(current_user)):
+def list_datasets():
+    user = current_user()
     return store.list_datasets(user["id"])
 
 
-@router.post("/datasets/{dataset_id}/rescore")
-def rescore_dataset(dataset_id: int, user: dict = Depends(current_user)):
+@router.post("/datasets/<int:dataset_id>/rescore")
+def rescore_dataset(dataset_id: int):
+    user = current_user()
     ds, stored = store.get_dataset(user["id"], dataset_id)
     if not ds:
-        raise HTTPException(404, "Dataset not found")
+        raise NotFound("Dataset not found")
     store.delete_dataset_rows(dataset_id)
     return {"dataset": ds, **_score_dataset(datasets.parse(ds["filename"], datasets.load_file(stored)), dataset_id)}
 
 
-@router.get("/datasets/{dataset_id}/file")
-def download_original(dataset_id: int, user: dict = Depends(current_user)):
+@router.get("/datasets/<int:dataset_id>/file")
+def download_original(dataset_id: int):
+    user = current_user()
     ds, stored = store.get_dataset(user["id"], dataset_id)
     if not ds:
-        raise HTTPException(404, "Dataset not found")
-    return Response(datasets.load_file(stored), media_type="application/octet-stream",
+        raise NotFound("Dataset not found")
+    return Response(datasets.load_file(stored), mimetype="application/octet-stream",
                     headers={"Content-Disposition": f'attachment; filename="{ds["filename"]}"'})
 
 
-@router.delete("/datasets/{dataset_id}")
-def remove_dataset(dataset_id: int, user: dict = Depends(current_user)):
+@router.delete("/datasets/<int:dataset_id>")
+def remove_dataset(dataset_id: int):
+    user = current_user()
     stored = store.delete_dataset(user["id"], dataset_id)
     if stored is None:
-        raise HTTPException(404, "Dataset not found")
+        raise NotFound("Dataset not found")
     datasets.remove_file(stored)
     return {"deleted": True}
 
 
 @router.get("/export/flagged")
-def export_flagged(format: str = "csv", dataset_id: Optional[int] = None, decision: str = "BLOCK,STEP_UP_AUTH",
-                   status: Optional[str] = None):
+def export_flagged():
     """Download detected fraud (flagged transactions) as csv / xlsx / docx / pdf / json."""
+    format = request.args.get("format", "csv")
+    dataset_id = integer_arg("dataset_id")
+    decision = request.args.get("decision", "BLOCK,STEP_UP_AUTH")
+    status = request.args.get("status")
     if format not in exports.FORMATS:
-        raise HTTPException(400, f"Format must be one of {', '.join(exports.FORMATS)}")
+        raise BadRequest(f"Format must be one of {', '.join(exports.FORMATS)}")
     decisions = [d for d in decision.split(",") if d in {"BLOCK", "STEP_UP_AUTH", "ALLOW"}]
     rows = store.query_rows(decisions, status, dataset_id)
     if not rows:
-        raise HTTPException(404, "No matching transactions to export.")
+        raise NotFound("No matching transactions to export.")
     data, media, name = exports.build(rows, format)
-    return Response(data, media_type=media, headers={"Content-Disposition": f'attachment; filename="{name}"'})
+    return Response(data, mimetype=media, headers={"Content-Disposition": f'attachment; filename="{name}"'})
 
 
 @router.get("/transactions")
-def transactions(decision: Optional[str] = None, status: Optional[str] = None, limit: int = 100, offset: int = 0):
-    return store.listing(decision, status, min(limit, 500), offset)
+def transactions():
+    decision = request.args.get("decision")
+    status = request.args.get("status")
+    limit = integer_arg("limit") or 100
+    offset = integer_arg("offset") or 0
+    return store.listing(decision, status, min(max(limit, 1), 500), max(offset, 0))
 
 
 class StatusIn(BaseModel):
     status: Literal["confirmed_fraud", "dismissed", "open"]
 
 
-@router.patch("/transactions/{txn_id}")
-def update_status(txn_id: int, body: StatusIn):
-    row = store.set_status(txn_id, body.status)
+@router.patch("/transactions/<int:txn_id>")
+def update_status(txn_id: int):
+    row = store.set_status(txn_id, body(StatusIn).status)
     if not row:
-        raise HTTPException(404, "Transaction not found")
+        raise NotFound("Transaction not found")
     return row
 
 
@@ -266,7 +303,7 @@ def clear_history():
 @router.get("/model/report")
 def report():
     if not REPORT_PATH.exists():
-        raise HTTPException(404, "No report yet. Run `python scripts/train.py`.")
+        raise NotFound("No report yet. Run `python scripts/train.py`.")
     return json.loads(REPORT_PATH.read_text())
 
 
@@ -276,19 +313,27 @@ def fed_status():
 
 
 @router.post("/federated/train")
-def fed_train(body: TrainIn, user: dict = Depends(current_user)):
-    cfg = FedConfig(algorithm=body.algorithm, rounds=body.rounds, local_epochs=body.local_epochs, lr=body.lr,
-                    mu=body.mu, dp_clip=body.dp_clip, dp_noise=body.dp_noise, secure_agg=body.secure_agg,
-                    dp_delta=body.dp_delta)
-    if not training.start(cfg, body.promote, body.full_comparison, user["id"]):
-        raise HTTPException(409, "A training job is already running.")
+def fed_train():
+    user = current_user()
+    body_data = body(TrainIn)
+    cfg = FedConfig(algorithm=body_data.algorithm, rounds=body_data.rounds, local_epochs=body_data.local_epochs, lr=body_data.lr,
+                    mu=body_data.mu, dp_clip=body_data.dp_clip, dp_noise=body_data.dp_noise, secure_agg=body_data.secure_agg,
+                    dp_delta=body_data.dp_delta)
+    if not training.start(cfg, body_data.promote, body_data.full_comparison, user["id"]):
+        raise Conflict("A training job is already running.")
     return {"started": True}
 
 
 @router.get("/privacy/epsilon")
-def privacy_epsilon(noise: float, rounds: int, delta: float = 1e-5):
+def privacy_epsilon():
     """Live epsilon preview for the Federated Lab."""
     from app.ml.privacy import epsilon
+    try:
+        noise = float(request.args["noise"])
+        rounds = int(request.args["rounds"])
+        delta = float(request.args.get("delta", 1e-5))
+    except (KeyError, ValueError) as error:
+        raise UnprocessableEntity("Provide valid noise, rounds and delta values.") from error
     e = epsilon(noise, rounds, delta)
     return {"epsilon": None if e == float("inf") else round(e, 2)}
 

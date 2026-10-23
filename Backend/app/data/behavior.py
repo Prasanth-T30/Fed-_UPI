@@ -39,7 +39,8 @@ def compute(df: pd.DataFrame) -> pd.DataFrame:
     ts_sorted = t[order]
     keys = pd.Series(np.arange(n))
     for _, idx in keys.groupby(sender).groups.items():
-        idx = np.asarray(idx); tt = ts_sorted[idx]
+        idx = np.asarray(idx)
+        tt = ts_sorted[idx]
         last_hour[order[idx]] = _prior_in_window(tt, H1)
         last_day[order[idx]] = _prior_in_window(tt, H24)
         if len(idx) > 1:

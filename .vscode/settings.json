@@ -1,4 +1,5 @@
 {
+  "python.defaultInterpreterPath": "${workspaceFolder}\\Backend\\.venv\\Scripts\\python.exe",
   "files.watcherExclude": {
     "**/.git/objects/**": true,
     "**/.mypy_cache/**": true,

@@ -40,23 +40,65 @@ if (-not (Test-Path $python)) {
     }
 }
 
-& $python -c "import fastapi, torch, sklearn, sqlalchemy, openpyxl, docx, reportlab" 2>$null
-if ($LASTEXITCODE -ne 0) {
+function Test-BackendDependencies {
+    # PowerShell 5 converts native stderr into error records. Use Process so a
+    # failed import can be inspected without triggering NativeCommandError.
+    $startInfo = [System.Diagnostics.ProcessStartInfo]::new()
+    $startInfo.FileName = $python
+    $startInfo.Arguments = '-c "import flask, flask_cors, waitress, torch, sklearn, sqlalchemy, openpyxl, docx, reportlab"'
+    $startInfo.UseShellExecute = $false
+    $startInfo.CreateNoWindow = $true
+    $startInfo.RedirectStandardOutput = $true
+    $startInfo.RedirectStandardError = $true
+
+    $process = [System.Diagnostics.Process]::new()
+    $process.StartInfo = $startInfo
+    [void]$process.Start()
+    $standardOutput = $process.StandardOutput.ReadToEnd()
+    $standardError = $process.StandardError.ReadToEnd()
+    $process.WaitForExit()
+
+    [pscustomobject]@{
+        ExitCode = $process.ExitCode
+        Output = ($standardOutput + $standardError).Trim()
+    }
+
+    $process.Dispose()
+}
+
+$dependencyProbe = Test-BackendDependencies
+if ($dependencyProbe.ExitCode -ne 0 -and $dependencyProbe.Output -match 'Application Control policy has blocked this file') {
+    throw @"
+Windows Smart App Control blocked native Python modules required by FedUPI (PyTorch/scikit-learn).
+
+Open Windows Security > App & browser control > Smart App Control settings and turn Smart App Control Off, then run .\backend.ps1 again. Windows does not support per-app exceptions for Smart App Control.
+
+Python error:
+$($dependencyProbe.Output)
+"@
+}
+
+if ($dependencyProbe.ExitCode -ne 0) {
     Write-Host 'Installing backend dependencies...'
     & $python -m pip install --upgrade pip
     & $python -m pip install -r requirements.txt --extra-index-url https://download.pytorch.org/whl/cpu
     if ($LASTEXITCODE -ne 0) { throw 'Backend dependency installation failed.' }
+
+    $dependencyProbe = Test-BackendDependencies
+    if ($dependencyProbe.ExitCode -ne 0) {
+        throw "Backend dependencies were installed, but the import check still failed:`n$($dependencyProbe.Output)"
+    }
 }
 
 if (-not (Test-Path 'artifacts\fedupi_model.pt')) {
     throw 'No model artifact found. Train from your labelled data first: cd Backend; .\.venv\Scripts\python.exe scripts\train.py --data <path-to-file> --quick'
 }
 
-$uvicornArgs = @('-m', 'uvicorn', 'app.main:app', '--host', '127.0.0.1', '--port', "$Port")
 if ($Reload) {
-    Write-Warning 'Reload mode temporarily uses extra memory. Do not use it while training or running tests.'
-    $uvicornArgs += @('--reload', '--reload-dir', 'app')
+    Write-Warning 'Flask reload uses extra memory. Do not use it while training or running tests.'
+    $env:FLASK_DEBUG = '1'
+    & $python -m flask --app app.main run --host 127.0.0.1 --port $Port
+} else {
+    Write-Host "Backend: http://127.0.0.1:$Port  (health: /api/health)"
+    & $python -m waitress --listen="127.0.0.1:$Port" app.main:app
 }
-
-Write-Host "Backend: http://127.0.0.1:$Port  (API docs: /docs)"
-& $python @uvicornArgs

@@ -1,6 +1,5 @@
 """Neural networks used by the federation."""
 
-import torch
 from torch import nn
 
 

@@ -78,7 +78,8 @@ class Client:
         if len(y) == 0:
             return {"state": global_state, "n": 0}
         opt = torch.optim.SGD(model.parameters(), lr=cfg.lr, momentum=0.9)
-        pos = float(max(y.sum(), 1)); neg = float(max(len(y) - y.sum(), 1))
+        pos = float(max(y.sum(), 1))
+        neg = float(max(len(y) - y.sum(), 1))
         bce = nn.BCEWithLogitsLoss(pos_weight=torch.tensor(min(neg / pos, 30.0) ** 0.7))
         gen = torch.Generator().manual_seed(cfg.seed * 1000 + rnd)
         xt, yt = torch.from_numpy(x), torch.from_numpy(y.astype(np.float32))

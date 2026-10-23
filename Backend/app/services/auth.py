@@ -8,7 +8,8 @@ import os
 import secrets
 import time
 
-from fastapi import Depends, Header, HTTPException
+from flask import request
+from werkzeug.exceptions import Unauthorized
 
 from app.config import ROOT
 from app.services import store
@@ -60,13 +61,11 @@ def read_token(token: str):
         return None
 
 
-def current_user(authorization: str = Header(default="")) -> dict:
+def current_user() -> dict:
+    authorization = request.headers.get("Authorization", "")
     token = authorization.removeprefix("Bearer ").strip()
     uid = read_token(token) if token else None
     user = store.get_user(uid) if uid else None
     if not user:
-        raise HTTPException(401, "Not authenticated")
+        raise Unauthorized("Not authenticated")
     return user
-
-
-CurrentUser = Depends(current_user)

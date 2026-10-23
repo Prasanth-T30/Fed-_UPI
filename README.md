@@ -1,6 +1,6 @@
 # FedUPI
 
-Run the backend and frontend in **two separate terminals**. The launchers install missing dependencies, prevent duplicate servers, use fixed ports, and keep backend memory bounded.
+Run the Flask backend and React frontend in **two separate terminals**. The launchers install missing dependencies, prevent duplicate servers, use fixed ports, and keep backend memory bounded.
 
 ## Requirements
 
@@ -43,7 +43,7 @@ Terminal 2:
 ./frontend.sh
 ```
 
-Open <http://127.0.0.1:5173>. API documentation is at <http://127.0.0.1:8001/docs>.
+Open <http://127.0.0.1:5173>. Check the Flask API at <http://127.0.0.1:8001/api/health>.
 
 ## Optional ports
 

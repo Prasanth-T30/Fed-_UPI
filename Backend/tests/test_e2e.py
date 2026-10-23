@@ -1,7 +1,6 @@
 """End-to-end API checks: access control, risk tiers, repeat-payment history, uploads, exports, alerts, training jobs."""
 
 import io
-import json
 import time
 import uuid
 from pathlib import Path
@@ -9,7 +8,7 @@ from pathlib import Path
 import pandas as pd
 import pytest
 from docx import Document
-from fastapi.testclient import TestClient
+from flask_client import TestClient
 from openpyxl import load_workbook
 
 from app.main import app
@@ -119,19 +118,26 @@ def docx_bytes(df):
         cells = t.add_row().cells
         for i, v in enumerate(rec):
             cells[i].text = str(v)
-    b = io.BytesIO(); d.save(b)
+    b = io.BytesIO()
+    d.save(b)
     return b.getvalue()
 
 
 @pytest.mark.parametrize("fmt", ["csv", "xlsx", "json", "tsv", "docx"])
 def test_upload_every_supported_format(h, fmt):
     df = demo_df()
-    if fmt == "csv": data = df.to_csv(index=False).encode()
-    elif fmt == "tsv": data = df.to_csv(index=False, sep="\t").encode()
-    elif fmt == "json": data = df.to_json(orient="records").encode()
+    if fmt == "csv":
+        data = df.to_csv(index=False).encode()
+    elif fmt == "tsv":
+        data = df.to_csv(index=False, sep="\t").encode()
+    elif fmt == "json":
+        data = df.to_json(orient="records").encode()
     elif fmt == "xlsx":
-        b = io.BytesIO(); df.to_excel(b, index=False); data = b.getvalue()
-    else: data = docx_bytes(df)
+        b = io.BytesIO()
+        df.to_excel(b, index=False)
+        data = b.getvalue()
+    else:
+        data = docx_bytes(df)
     r = upload(h, f"demo.{fmt}", data)
     assert r.status_code == 200, r.text
     body = r.json()
@@ -157,7 +163,8 @@ def test_dataset_parser_has_no_row_count_limit():
 
 
 def test_unknown_category_is_adapted(h):
-    df = demo_df(); df.loc[0, "merchant_category"] = "food"
+    df = demo_df()
+    df.loc[0, "merchant_category"] = "food"
     r = upload(h, "cat.csv", df.to_csv(index=False).encode())
     assert r.status_code == 200
     c.delete(f"/api/datasets/{r.json()['dataset']['id']}", headers=h)
@@ -269,8 +276,10 @@ def test_overview_uses_scored_transactions(h):
 
 # ---------------------------------------------------------------- privacy endpoint and training job
 def test_epsilon_endpoint_monotonic(h):
-    e = lambda z: c.get(f"/api/privacy/epsilon?noise={z}&rounds=15", headers=h).json()["epsilon"]
-    assert e(2.0) < e(1.0) < e(0.5)
+    def epsilon(noise):
+        return c.get(f"/api/privacy/epsilon?noise={noise}&rounds=15", headers=h).json()["epsilon"]
+
+    assert epsilon(2.0) < epsilon(1.0) < epsilon(0.5)
     assert c.get("/api/privacy/epsilon?noise=0&rounds=15", headers=h).json()["epsilon"] is None
 
 

@@ -31,9 +31,12 @@ def recall_threshold(y, s, minimum_recall: float = 0.68) -> float:
 def evaluate(y, s, thr: float) -> dict:
     y = np.asarray(y).astype(int)
     pred = s >= thr
-    tp = int((pred & (y == 1)).sum()); fp = int((pred & (y == 0)).sum())
-    fn = int((~pred & (y == 1)).sum()); tn = int((~pred & (y == 0)).sum())
-    prec = tp / max(tp + fp, 1); rec = tp / max(tp + fn, 1)
+    tp = int((pred & (y == 1)).sum())
+    fp = int((pred & (y == 0)).sum())
+    fn = int((~pred & (y == 1)).sum())
+    tn = int((~pred & (y == 0)).sum())
+    prec = tp / max(tp + fp, 1)
+    rec = tp / max(tp + fn, 1)
     return {
         "precision": round(prec, 4), "recall": round(rec, 4),
         "f1": round(2 * prec * rec / max(prec + rec, 1e-12), 4),

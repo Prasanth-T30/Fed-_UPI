@@ -3,7 +3,7 @@ import uuid
 
 import pandas as pd
 import pytest
-from fastapi.testclient import TestClient
+from flask_client import TestClient
 
 from app.data.generator import generate
 from app.main import app
@@ -51,7 +51,8 @@ def test_upload_export_roundtrip(auth):
         pytest.skip("model not trained")
     h, _ = auth
     df = generate(seed=5, scale=0.04).head(300)
-    xl = io.BytesIO(); df.to_excel(xl, index=False)
+    xl = io.BytesIO()
+    df.to_excel(xl, index=False)
     r = c.post("/api/datasets", headers=h, files={"file": ("sample.xlsx", xl.getvalue())})
     assert r.status_code == 200, r.text
     ds = r.json()["dataset"]
@@ -76,7 +77,13 @@ def test_policy_rules_demo_upload(auth):
     assert r.status_code == 200, r.text
     rows = {x["txn_ref"]: x for x in r.json()["results"]}
     demo = pd.read_csv(path).set_index("transaction_id")
-    level = lambda amt: next(rows[i]["decision"] for i in demo.index if demo.loc[i, "amount_inr"] == amt and demo.loc[i, "sender_id"].startswith("A-BAND"))
+    def level(amount):
+        return next(
+            rows[i]["decision"]
+            for i in demo.index
+            if demo.loc[i, "amount_inr"] == amount and demo.loc[i, "sender_id"].startswith("A-BAND")
+        )
+
     assert level(500) == "ALLOW" and level(69_999) == "ALLOW"
     assert level(70_000) == "STEP_UP_AUTH" and level(99_999) == "STEP_UP_AUTH"
     assert level(100_000) == "BLOCK" and level(199_000) == "BLOCK"

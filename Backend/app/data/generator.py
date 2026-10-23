@@ -73,32 +73,41 @@ def _fraud(rng, n, mult, weights):
     scen = rng.choice(SCENARIOS, n, p=np.array(weights) / np.sum(weights))
     f = _legit(rng, n, mult)
     f["scenario"], f["is_fraud"], f["is_new_beneficiary"] = scen, 1, 1
-    u = lambda lo, hi, k: rng.uniform(lo, hi, k)
+
+    def uniform(low, high, size):
+        return rng.uniform(low, high, size)
+
     for s in SCENARIOS:
         m = scen == s
         k = int(m.sum())
         if not k:
             continue
         if s == "collect_scam":
-            f.loc[m, "is_collect_request"] = 1; f.loc[m, "merchant_category"] = "p2p"
-            f.loc[m, "amount_to_average_ratio"] = u(1.5, 6, k); f.loc[m, "upi_pin_failures_24h"] = rng.poisson(0.8, k)
+            f.loc[m, "is_collect_request"] = 1
+            f.loc[m, "merchant_category"] = "p2p"
+            f.loc[m, "amount_to_average_ratio"] = uniform(1.5, 6, k)
+            f.loc[m, "upi_pin_failures_24h"] = rng.poisson(0.8, k)
         elif s == "sim_swap":
-            f.loc[m, "is_new_device"] = 1; f.loc[m, "failed_login_attempts_24h"] = rng.integers(1, 7, k)
-            f.loc[m, "amount_to_average_ratio"] = u(2, 8, k); f.loc[m, "transaction_hour"] = rng.integers(0, 6, k)
+            f.loc[m, "is_new_device"] = 1
+            f.loc[m, "failed_login_attempts_24h"] = rng.integers(1, 7, k)
+            f.loc[m, "amount_to_average_ratio"] = uniform(2, 8, k)
+            f.loc[m, "transaction_hour"] = rng.integers(0, 6, k)
         elif s == "mule_account":
-            f.loc[m, "amount_to_average_ratio"] = u(2.0, 8, k)
+            f.loc[m, "amount_to_average_ratio"] = uniform(2.0, 8, k)
         elif s == "qr_phishing":
             f.loc[m, "merchant_category"] = rng.choice(["merchant", "investment"], k)
-            f.loc[m, "amount_to_average_ratio"] = u(1.2, 4.5, k); f.loc[m, "upi_pin_failures_24h"] = rng.poisson(0.5, k)
+            f.loc[m, "amount_to_average_ratio"] = uniform(1.2, 4.5, k)
+            f.loc[m, "upi_pin_failures_24h"] = rng.poisson(0.5, k)
         elif s == "account_takeover":
             f.loc[m, "failed_login_attempts_24h"] = rng.integers(3, 9, k)
             f.loc[m, "upi_pin_failures_24h"] = rng.integers(2, 6, k)
-            f.loc[m, "is_new_device"] = (rng.random(k) < 0.6).astype(int); f.loc[m, "transaction_hour"] = rng.integers(0, 6, k)
-            f.loc[m, "amount_to_average_ratio"] = u(1.5, 7, k)
+            f.loc[m, "is_new_device"] = (rng.random(k) < 0.6).astype(int)
+            f.loc[m, "transaction_hour"] = rng.integers(0, 6, k)
+            f.loc[m, "amount_to_average_ratio"] = uniform(1.5, 7, k)
         elif s == "repeat_receiver":
-            f.loc[m, "amount_to_average_ratio"] = u(1.0, 4.0, k)
+            f.loc[m, "amount_to_average_ratio"] = uniform(1.0, 4.0, k)
         else:
-            f.loc[m, "amount_to_average_ratio"] = u(0.8, 2.2, k)
+            f.loc[m, "amount_to_average_ratio"] = uniform(0.8, 2.2, k)
     avg = rng.lognormal(np.log(1500 * mult), 0.7, n) * np.array([CAT_SCALE[c] for c in f["merchant_category"]])
     amount = avg * f["amount_to_average_ratio"].to_numpy()
     hv = rng.random(n) < 0.12                           # some fraud is high value
@@ -127,7 +136,8 @@ def _assign_identity(rng, df, bank_code, n_users):
         pos = 0
         while pos < len(idx):
             size = int(rng.integers(3, 8)) if scen == "repeat_receiver" else int(rng.integers(4, 10))
-            grp = idx[pos:pos + size]; pos += size
+            grp = idx[pos:pos + size]
+            pos += size
             base = START + pd.Timedelta(days=int(rng.integers(0, 30)), hours=int(rng.integers(0, 24)), minutes=int(rng.integers(0, 60)))
             span = 150 if scen == "repeat_receiver" else 50
             offs = np.sort(rng.integers(0, span, len(grp)))

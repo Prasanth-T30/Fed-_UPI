@@ -29,7 +29,7 @@ if [[ ! -x "$PYTHON" ]]; then
   python3 -m venv .venv
 fi
 
-if ! "$PYTHON" -c 'import fastapi, torch, sklearn, sqlalchemy, openpyxl, docx, reportlab' >/dev/null 2>&1; then
+if ! "$PYTHON" -c 'import flask, flask_cors, waitress, torch, sklearn, sqlalchemy, openpyxl, docx, reportlab' >/dev/null 2>&1; then
   echo "Installing backend dependencies..."
   "$PYTHON" -m pip install --upgrade pip
   "$PYTHON" -m pip install -r requirements.txt --extra-index-url https://download.pytorch.org/whl/cpu
@@ -41,12 +41,12 @@ if [[ ! -f artifacts/fedupi_model.pt ]]; then
   exit 1
 fi
 
-ARGS=(app.main:app --host 127.0.0.1 --port "$PORT")
 if [[ "$RELOAD" -eq 1 ]]; then
   echo "WARNING: reload mode uses extra memory; do not combine it with training or tests." >&2
-  ARGS+=(--reload --reload-dir app)
+  export FLASK_DEBUG=1
+  exec "$PYTHON" -m flask --app app.main run --host 127.0.0.1 --port "$PORT"
 fi
 
-echo "Backend: http://127.0.0.1:$PORT  (API docs: /docs)"
-exec "$PYTHON" -m uvicorn "${ARGS[@]}"
+echo "Backend: http://127.0.0.1:$PORT  (health: /api/health)"
+exec "$PYTHON" -m waitress --listen="127.0.0.1:$PORT" app.main:app
 

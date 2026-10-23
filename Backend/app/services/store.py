@@ -1,7 +1,6 @@
 """SQLite persistence for scored transactions and the analyst alert queue."""
 
 import datetime as dt
-import json
 
 from sqlalchemy import JSON, Column, DateTime, Float, Integer, String, create_engine, func, select
 from sqlalchemy.orm import declarative_base, sessionmaker
@@ -105,7 +104,8 @@ def create_user(email, name, password_hash, organization="", role="Fraud analyst
     with Session() as s:
         u = User(email=email.lower().strip(), name=name.strip(), password_hash=password_hash,
                  organization=organization, role=role)
-        s.add(u); s.commit()
+        s.add(u)
+        s.commit()
         return user_dict(u)
 
 
@@ -132,7 +132,8 @@ def dataset_dict(d: Dataset) -> dict:
 def add_dataset(owner_id, filename, stored_as, size, rows, columns):
     with Session() as s:
         d = Dataset(owner_id=owner_id, filename=filename, stored_as=stored_as, size_bytes=size, rows=rows, columns=columns)
-        s.add(d); s.commit()
+        s.add(d)
+        s.commit()
         return d.id
 
 
@@ -170,7 +171,8 @@ def delete_dataset(owner_id, dataset_id):
             return None
         stored = d.stored_as
         s.query(Txn).filter(Txn.dataset_id == dataset_id).delete()
-        s.delete(d); s.commit()
+        s.delete(d)
+        s.commit()
         return stored
 
 

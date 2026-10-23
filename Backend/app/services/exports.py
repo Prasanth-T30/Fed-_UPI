@@ -94,7 +94,8 @@ def build(rows: list, fmt: str, title: str = "FedUPI flagged transactions"):
         d = Document()
         d.add_heading(title, 1)
         d.add_paragraph(f"Generated {time.strftime('%Y-%m-%d %H:%M')} UTC | {len(df)} transactions")
-        t = d.add_table(rows=1, cols=len(HEAD)); t.style = "Light Grid Accent 1"
+        t = d.add_table(rows=1, cols=len(HEAD))
+        t.style = "Light Grid Accent 1"
         for i, h in enumerate(HEAD):
             t.rows[0].cells[i].text = h
         for rec in df.itertuples(index=False):
@@ -114,7 +115,9 @@ def build(rows: list, fmt: str, title: str = "FedUPI flagged transactions"):
         from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
         st = getSampleStyleSheet()
         doc = SimpleDocTemplate(buf, pagesize=landscape(A4), leftMargin=24, rightMargin=24, topMargin=24, bottomMargin=24)
-        small = st["BodyText"].clone("s"); small.fontSize = 6.5; small.leading = 8
+        small = st["BodyText"].clone("s")
+        small.fontSize = 6.5
+        small.leading = 8
         shown = df.head(1000)
         data = [HEAD] + [[Paragraph(str(v), small) for v in r] for r in shown.itertuples(index=False)]
         tbl = Table(data, repeatRows=1, colWidths=[72, 94, 68, 42, 72, 392])

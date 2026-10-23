@@ -21,7 +21,9 @@ pytestmark = pytest.mark.skipif(not service.ready, reason="model not trained")
 def unseen():
     df = pd.read_csv(SAMPLES / "upi_test_transactions.csv")
     res = service.score(df, explain=False)
-    df["risk"] = [r["risk_score"] for r in res]; df["model"] = [r["model_score"] for r in res]; df["decision"] = [r["decision"] for r in res]
+    df["risk"] = [r["risk_score"] for r in res]
+    df["model"] = [r["model_score"] for r in res]
+    df["decision"] = [r["decision"] for r in res]
     return df
 
 

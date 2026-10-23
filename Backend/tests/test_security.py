@@ -4,7 +4,7 @@ import time
 import uuid
 
 import pytest
-from fastapi.testclient import TestClient
+from flask_client import TestClient
 
 from app.main import app
 from app.services import auth
