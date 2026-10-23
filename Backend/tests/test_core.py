@@ -4,8 +4,8 @@ import torch
 
 from app.data.features import FEATURES, transform
 from app.data.generator import generate
-from app.ml.federated import Client, FedConfig, aggregate, run_federation
-from app.ml.metrics import best_threshold, evaluate, recall_threshold
+from app.ml.federated import Client, FedConfig, aggregate, make_model, run_federation
+from app.ml.metrics import best_threshold, evaluate, paper_threshold, recall_threshold
 
 
 @pytest.fixture(scope="module")
@@ -46,6 +46,21 @@ def test_metrics():
     s = np.array([0.1, 0.4, 0.35, 0.8])
     m = evaluate(y, s, best_threshold(y, s))
     assert 0 <= m["f1"] <= 1 and m["tp"] + m["fn"] == 2
+
+
+def test_research_paper_models_and_threshold_grid():
+    logistic = make_model("logistic", 13)
+    paper_mlp = make_model("paper_mlp", 13)
+    assert logistic.linear.in_features == 13
+    assert paper_mlp.net[0].in_features == 13
+    assert paper_mlp.net[0].out_features == 16
+    assert paper_mlp.net[-1].out_features == 1
+
+    y = np.array([0, 0, 1, 1])
+    scores = np.array([0.05, 0.25, 0.55, 0.90])
+    threshold = paper_threshold(y, scores)
+    assert 0.10 <= threshold <= 0.95
+    assert round(threshold, 2) == threshold
 
 
 def test_recall_threshold_meets_target_and_prefers_highest_cutoff():

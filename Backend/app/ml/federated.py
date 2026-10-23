@@ -20,12 +20,12 @@ from torch import nn
 from app.ml import secagg
 from app.ml.metrics import best_threshold, evaluate
 from app.ml.privacy import epsilon
-from app.ml.networks import AutoEncoder, FraudMLP
+from app.ml.networks import AutoEncoder, FraudMLP, LogisticFraudClassifier
 
 
 @dataclass
 class FedConfig:
-    kind: str = "clf"            # "clf" supervised MLP | "ae" unsupervised autoencoder
+    kind: str = "clf"            # "clf" | "paper_mlp" | "logistic" | "ae"
     algorithm: str = "fedavg"    # "fedavg" | "fedprox"
     rounds: int = 15
     local_epochs: int = 2
@@ -43,7 +43,13 @@ class FedConfig:
 
 
 def make_model(kind: str, n_in: int):
-    return FraudMLP(n_in) if kind == "clf" else AutoEncoder(n_in)
+    if kind == "ae":
+        return AutoEncoder(n_in)
+    if kind == "logistic":
+        return LogisticFraudClassifier(n_in)
+    if kind == "paper_mlp":
+        return FraudMLP(n_in, hidden=(16,), dropout=0)
+    return FraudMLP(n_in)
 
 
 def _flat(state):
@@ -54,7 +60,7 @@ def scores(model, kind: str, x: np.ndarray) -> np.ndarray:
     model.eval()
     with torch.no_grad():
         t = torch.from_numpy(x)
-        out = torch.sigmoid(model(t)) if kind == "clf" else model.error(t)
+        out = model.error(t) if kind == "ae" else torch.sigmoid(model(t))
     return out.numpy()
 
 
@@ -89,7 +95,7 @@ class Client:
             for i in range(0, len(yt), cfg.batch_size):
                 idx = perm[i:i + cfg.batch_size]
                 opt.zero_grad()
-                if cfg.kind == "clf":
+                if cfg.kind != "ae":
                     loss = bce(model(xt[idx]), yt[idx])
                 else:
                     loss = model.error(xt[idx]).mean()

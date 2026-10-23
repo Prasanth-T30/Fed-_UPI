@@ -4,7 +4,7 @@ import { Play } from "lucide-react";
 import { api, pct } from "../services/api";
 import { Card, ErrorNote, Page, Stat } from "../components/ui";
 
-const DEF = { algorithm: "fedavg", rounds: 12, local_epochs: 2, lr: 0.01, mu: 0.01, dp_clip: 0, dp_noise: 0, secure_agg: false, dp_delta: 1e-5, full_comparison: false, promote: false };
+const DEF = { model: "mlp", algorithm: "fedavg", rounds: 12, local_epochs: 2, lr: 0.01, batch_size: 256, mu: 0.01, dp_clip: 0, dp_noise: 0, secure_agg: false, dp_delta: 1e-5, full_comparison: false, promote: false };
 
 export default function FederatedLab() {
   const [cfg, setCfg] = useState(DEF);
@@ -32,8 +32,18 @@ export default function FederatedLab() {
     try { await api.fedTrain(cfg); refresh(); } catch (e) { setErr(e.message); }
   };
   const set = (k) => (e) => setCfg({ ...cfg, [k]: e.target.type === "checkbox" ? e.target.checked : e.target.type === "number" ? Number(e.target.value) : e.target.value });
+  const usePaperPreset = () => setCfg({
+    ...cfg,
+    model: "paper_mlp",
+    algorithm: "fedavg",
+    rounds: 20,
+    local_epochs: 2,
+    lr: 0.02,
+    batch_size: 512,
+    full_comparison: true,
+  });
   const running = st?.status === "running";
-  const rounds = (st?.rounds || []).filter((r) => r.stage?.endsWith("/clf"));
+  const rounds = (st?.rounds || []).filter((r) => r.stage?.endsWith("/clf") || r.stage?.endsWith("/paper_mlp"));
   const last = rounds[rounds.length - 1];
 
   return (
@@ -41,6 +51,13 @@ export default function FederatedLab() {
       <div className="grid two wide-left">
         <Card title="Training configuration">
           <div className="form">
+            <button type="button" className="btn ghost" onClick={usePaperPreset} disabled={running}>Use research-paper preset</button>
+            <label>Model
+              <select value={cfg.model} onChange={set("model")}>
+                <option value="mlp">Enhanced MLP (64-32)</option>
+                <option value="paper_mlp">Paper MLP (single 16-unit hidden layer)</option>
+              </select>
+            </label>
             <label>Algorithm
               <select value={cfg.algorithm} onChange={set("algorithm")}>
                 <option value="fedavg">FedAvg (McMahan 2017)</option>
@@ -50,6 +67,7 @@ export default function FederatedLab() {
             <label>Communication rounds<input type="number" min="1" max="40" value={cfg.rounds} onChange={set("rounds")} /></label>
             <label>Local epochs per round<input type="number" min="1" max="5" value={cfg.local_epochs} onChange={set("local_epochs")} /></label>
             <label>Learning rate<input type="number" step="0.005" value={cfg.lr} onChange={set("lr")} /></label>
+            <label>Mini-batch size<input type="number" min="32" max="2048" step="32" value={cfg.batch_size} onChange={set("batch_size")} /></label>
             {cfg.algorithm === "fedprox" && <label>FedProx μ<input type="number" step="0.01" value={cfg.mu} onChange={set("mu")} /></label>}
             <label>DP clip norm (0 = off)<input type="number" step="0.1" value={cfg.dp_clip} onChange={set("dp_clip")} /></label>
             <label>DP noise multiplier<input type="number" step="0.1" value={cfg.dp_noise} onChange={set("dp_noise")} disabled={!cfg.dp_clip} /></label>

@@ -50,7 +50,8 @@ class ModelService:
             self.meta = json.loads(META_PATH.read_text())
             state = torch.load(MODEL_PATH, map_location="cpu")
             n = self.meta["n_features"]
-            self.mlp, self.ae = make_model("clf", n), make_model("ae", n)
+            model_kind = self.meta.get("model_kind", "clf")
+            self.mlp, self.ae = make_model(model_kind, n), make_model("ae", n)
             self.mlp.load_state_dict(state["mlp"])
             self.ae.load_state_dict(state["ae"])
             self.mlp.eval()

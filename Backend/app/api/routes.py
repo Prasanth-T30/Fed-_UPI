@@ -52,7 +52,8 @@ PAPERS = [
      "venue": "ICLR 2018", "url": "https://arxiv.org/abs/1710.06963",
      "used_for": "Update clipping + Gaussian noise used in the privacy option."},
     {"title": "Practical Secure Aggregation for Privacy-Preserving Machine Learning", "authors": "Bonawitz et al.",
-     "venue": "ACM CCS 2017", "url": "https://eprint.iacr.org/2017/281", "used_for": "Future work: secure aggregation of updates."},
+     "venue": "ACM CCS 2017", "url": "https://eprint.iacr.org/2017/281",
+     "used_for": "Pairwise-masked aggregation prototype; production still needs authenticated key exchange and dropout recovery."},
     {"title": "Federated Machine Learning: Concept and Applications", "authors": "Yang, Liu, Chen, Tong",
      "venue": "ACM TIST 2019", "url": "https://arxiv.org/abs/1902.04885", "used_for": "Horizontal federated learning across institutions."},
     {"title": "FFD: A Federated Learning Based Method for Credit Card Fraud Detection", "authors": "Yang et al.",
@@ -97,10 +98,12 @@ class TxnIn(BaseModel):
 
 
 class TrainIn(BaseModel):
+    model: Literal["mlp", "paper_mlp"] = "mlp"
     algorithm: Literal["fedavg", "fedprox"] = "fedavg"
     rounds: int = Field(12, ge=1, le=40)
     local_epochs: int = Field(2, ge=1, le=5)
     lr: float = Field(0.01, gt=0, le=0.2)
+    batch_size: int = Field(256, ge=32, le=2048)
     mu: float = Field(0.01, ge=0, le=1)
     dp_clip: float = Field(0.0, ge=0, le=10)
     dp_noise: float = Field(0.0, ge=0, le=5)
@@ -123,7 +126,7 @@ def _when(r):
         return None
 
 
-def _persist(df: pd.DataFrame, results: list, source: str, truth=None, dataset_id=None):
+def _persist(owner_id: int, df: pd.DataFrame, results: list, source: str, truth=None, dataset_id=None):
     recs = []
     for i, (_, r) in enumerate(df.reset_index(drop=True).iterrows()):
         res = results[i]
@@ -134,10 +137,11 @@ def _persist(df: pd.DataFrame, results: list, source: str, truth=None, dataset_i
             txn_ref=str(r.get("transaction_id", f"API{i}")), source=source, bank=str(r.get("bank", "-")),
             category=str(r["merchant_category"]), amount=float(r["amount_inr"]), risk_score=res["risk_score"],
             risk_level=res["risk_level"], decision=res["decision"], reasons=res["reasons"],
+            model_version=res["model_version"],
             features={k: (v.item() if hasattr(v, "item") else v) for k, v in r.items() if k in REQUIRED + OPTIONAL},
             ground_truth=None if truth is None else int(truth[i]), dataset_id=dataset_id,
         ))
-    return store.save(recs)
+    return store.save(owner_id, recs)
 
 
 @public.get("/health")
@@ -147,7 +151,8 @@ def health():
 
 @router.get("/overview")
 def overview():
-    out = store.overview()
+    user = current_user()
+    out = store.overview(user["id"])
     report = json.loads(REPORT_PATH.read_text()) if REPORT_PATH.exists() else None
     out["model"] = None if not report else {
         "version": MODEL_VERSION, "metrics": report["final"]["metrics"], "trained_at": report["generated_at"],
@@ -160,10 +165,11 @@ def overview():
 @router.post("/transactions/score")
 def score_one():
     _ensure()
+    user = current_user()
     t = body(TxnIn)
     row = t.model_dump()
     now = store._utcnow()
-    hist = store.history_counts(row["sender_id"], row["receiver_id"], now)
+    hist = store.history_counts(user["id"], row["sender_id"], row["receiver_id"], now)
     row["transactions_last_hour"] = max(row["transactions_last_hour"], hist["last_hour"])
     row["sender_txn_24h"] = max(row["sender_txn_24h"], hist["last_24h"])
     row["same_receiver_24h"] = max(row["same_receiver_24h"], hist["same_receiver_24h"])
@@ -172,11 +178,11 @@ def score_one():
     row["timestamp"] = now.strftime("%Y-%m-%d %H:%M:%S")
     df = pd.DataFrame([row])
     res = service.score(df)
-    saved = _persist(df, res, "api")
+    saved = _persist(user["id"], df, res, "api")
     return {**res[0], "id": saved[0]["id"]}
 
 
-def _score_dataset(df: pd.DataFrame, dataset_id: int):
+def _score_dataset(owner_id: int, df: pd.DataFrame, dataset_id: int):
     _ensure()
     try:
         df = datasets.normalize_transactions(df)
@@ -187,7 +193,7 @@ def _score_dataset(df: pd.DataFrame, dataset_id: int):
     truth = None
     if "is_fraud" in df.columns:
         truth = pd.to_numeric(df["is_fraud"], errors="coerce").fillna(0).to_numpy()
-    saved = _persist(df, res, "upload", truth, dataset_id)
+    saved = _persist(owner_id, df, res, "upload", truth, dataset_id)
     flagged = sum(1 for r in res if r["decision"] != "ALLOW")
     store.set_dataset_flagged(dataset_id, flagged)
     counts = pd.Series([r["decision"] for r in res]).value_counts().to_dict()
@@ -211,7 +217,7 @@ def upload_dataset():
     stored = datasets.save_file(file.filename or "upload", raw)
     ds_id = store.add_dataset(user["id"], file.filename, stored, len(raw), len(df), list(df.columns))
     try:
-        out = _score_dataset(df, ds_id)
+        out = _score_dataset(user["id"], df, ds_id)
     except Exception:
         datasets.remove_file(stored)
         store.delete_dataset(user["id"], ds_id)
@@ -233,7 +239,8 @@ def rescore_dataset(dataset_id: int):
     if not ds:
         raise NotFound("Dataset not found")
     store.delete_dataset_rows(dataset_id)
-    return {"dataset": ds, **_score_dataset(datasets.parse(ds["filename"], datasets.load_file(stored)), dataset_id)}
+    df = datasets.parse(ds["filename"], datasets.load_file(stored))
+    return {"dataset": ds, **_score_dataset(user["id"], df, dataset_id)}
 
 
 @router.get("/datasets/<int:dataset_id>/file")
@@ -266,7 +273,8 @@ def export_flagged():
     if format not in exports.FORMATS:
         raise BadRequest(f"Format must be one of {', '.join(exports.FORMATS)}")
     decisions = [d for d in decision.split(",") if d in {"BLOCK", "STEP_UP_AUTH", "ALLOW"}]
-    rows = store.query_rows(decisions, status, dataset_id)
+    user = current_user()
+    rows = store.query_rows(user["id"], decisions, status, dataset_id)
     if not rows:
         raise NotFound("No matching transactions to export.")
     data, media, name = exports.build(rows, format)
@@ -275,11 +283,12 @@ def export_flagged():
 
 @router.get("/transactions")
 def transactions():
+    user = current_user()
     decision = request.args.get("decision")
     status = request.args.get("status")
     limit = integer_arg("limit") or 100
     offset = integer_arg("offset") or 0
-    return store.listing(decision, status, min(max(limit, 1), 500), max(offset, 0))
+    return store.listing(user["id"], decision, status, min(max(limit, 1), 500), max(offset, 0))
 
 
 class StatusIn(BaseModel):
@@ -288,7 +297,8 @@ class StatusIn(BaseModel):
 
 @router.patch("/transactions/<int:txn_id>")
 def update_status(txn_id: int):
-    row = store.set_status(txn_id, body(StatusIn).status)
+    user = current_user()
+    row = store.set_status(user["id"], txn_id, body(StatusIn).status)
     if not row:
         raise NotFound("Transaction not found")
     return row
@@ -296,7 +306,8 @@ def update_status(txn_id: int):
 
 @router.delete("/transactions")
 def clear_history():
-    store.clear()
+    user = current_user()
+    store.clear(user["id"])
     return {"cleared": True}
 
 
@@ -316,7 +327,9 @@ def fed_status():
 def fed_train():
     user = current_user()
     body_data = body(TrainIn)
-    cfg = FedConfig(algorithm=body_data.algorithm, rounds=body_data.rounds, local_epochs=body_data.local_epochs, lr=body_data.lr,
+    kind = "paper_mlp" if body_data.model == "paper_mlp" else "clf"
+    cfg = FedConfig(kind=kind, algorithm=body_data.algorithm, rounds=body_data.rounds,
+                    local_epochs=body_data.local_epochs, lr=body_data.lr, batch_size=body_data.batch_size,
                     mu=body_data.mu, dp_clip=body_data.dp_clip, dp_noise=body_data.dp_noise, secure_agg=body_data.secure_agg,
                     dp_delta=body_data.dp_delta)
     if not training.start(cfg, body_data.promote, body_data.full_comparison, user["id"]):

@@ -6,7 +6,7 @@ import { Card, Page } from "../components/ui";
 const MODULES = [
   ["Data layer", "UPI-style generator, 5 banks, 6 fraud typologies, fixed-scale feature engineering."],
   ["Federated engine", "FedAvg, FedProx, DP clipping + noise; parameters-only communication."],
-  ["AI models", "Supervised MLP classifier + unsupervised autoencoder (novelty signal); fused only if it improves validation F1."],
+  ["AI models", "Paper-compatible logistic and 16-unit MLP comparisons, plus the enhanced MLP and autoencoder production scorer."],
   ["Explainability", "Per-transaction gradient×input attribution turned into plain-language reasons."],
   ["Risk policy", "High risk only above ₹99,999; moderate for ₹70,000–99,999, repeated payments to one receiver, or model-flagged; risk % per payment."],
   ["Analyst loop", "Alert queue, confirm/dismiss labels stored for retraining."],
@@ -45,7 +45,7 @@ export default function Research() {
       <Card title="Honest limitations">
         <ul className="small plain">
           <li>Model quality depends on the coverage and accuracy of the labelled dataset supplied for training.</li>
-          <li>Model updates can leak information. Secure aggregation and a formal DP budget (ε) are future work.</li>
+          <li>Model updates can leak information. This prototype simulates secure aggregation and optional client-level DP, but production still requires authenticated transport, key management, dropout recovery and independent security review.</li>
           <li>The scoring API receives transaction signals in clear; this is a bank-side deployment, not private inference.</li>
         </ul>
       </Card>

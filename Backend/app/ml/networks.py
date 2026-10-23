@@ -3,14 +3,27 @@
 from torch import nn
 
 
+class LogisticFraudClassifier(nn.Module):
+    """Single linear logit used for the research paper's logistic baseline."""
+
+    def __init__(self, n_in: int):
+        super().__init__()
+        self.linear = nn.Linear(n_in, 1)
+
+    def forward(self, x):
+        return self.linear(x).squeeze(-1)
+
+
 class FraudMLP(nn.Module):
     """Supervised fraud classifier; outputs a logit."""
 
-    def __init__(self, n_in: int, hidden=(64, 32)):
+    def __init__(self, n_in: int, hidden=(64, 32), dropout: float = 0.1):
         super().__init__()
         layers, prev = [], n_in
         for h in hidden:
-            layers += [nn.Linear(prev, h), nn.ReLU(), nn.Dropout(0.1)]
+            layers += [nn.Linear(prev, h), nn.ReLU()]
+            if dropout:
+                layers.append(nn.Dropout(dropout))
             prev = h
         layers.append(nn.Linear(prev, 1))
         self.net = nn.Sequential(*layers)

@@ -116,3 +116,16 @@ cd Backend
 ```
 
 CSV, Excel, JSON, TSV and Word-table files are supported. PaySim can only be used when explicitly selected with `--dataset paysim` and its source archive has been installed.
+
+## Research-paper protocol
+
+The Federated Lab includes a **Use research-paper preset** button. It selects the paper's single-hidden-layer MLP, FedAvg, seed 42, 20 communication rounds, two local epochs, learning rate 0.02 and mini-batches of 512. Enabling the full comparison also reports federated, centralized and institution-only logistic baselines using the paper's validation-threshold sweep.
+
+The same preset is available from the command line:
+
+```powershell
+cd Backend
+.\.venv\Scripts\python.exe scripts\train.py --data C:\path\to\transactions.csv --paper-protocol
+```
+
+The enhanced MLP, autoencoder, FedProx, secure aggregation, differential privacy and policy rules remain available; the paper preset does not remove those project extensions.

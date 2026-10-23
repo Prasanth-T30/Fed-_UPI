@@ -14,6 +14,13 @@ def best_threshold(y, s) -> float:
     return float(ss[ends[np.argmax(f1)]])
 
 
+def paper_threshold(y, s) -> float:
+    """Paper protocol: choose the highest-F1 threshold from 0.10 through 0.95."""
+    thresholds = np.arange(0.10, 0.951, 0.01)
+    f1 = [evaluate(y, s, threshold)["f1"] for threshold in thresholds]
+    return round(float(thresholds[int(np.argmax(f1))]), 2)
+
+
 def recall_threshold(y, s, minimum_recall: float = 0.68) -> float:
     """Highest score cutoff that reaches the requested fraud recall.
 

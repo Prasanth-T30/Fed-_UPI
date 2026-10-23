@@ -100,6 +100,26 @@ def test_two_payments_to_a_friend_stay_low(h):
     assert a["decision"] == b["decision"] == "ALLOW"
 
 
+def test_transaction_history_is_private_to_each_institution(h):
+    sender = f"PRIVATE{uuid.uuid4().hex[:6]}"
+    first = score(h, amount_inr=1_200, sender_id=sender, receiver_id="R-private", merchant_category="p2p")
+    assert first["model_version"]
+
+    other = make_user()
+    other_result = score(other, amount_inr=1_200, sender_id=sender, receiver_id="R-private", merchant_category="p2p")
+    assert "repeat_receiver" not in other_result["rules"]
+    assert first["id"] not in [row["id"] for row in c.get("/api/transactions", headers=other).json()]
+    assert c.patch(
+        f"/api/transactions/{first['id']}",
+        headers=other,
+        json={"status": "dismissed"},
+    ).status_code == 404
+
+    own_rows = c.get("/api/transactions", headers=h).json()
+    saved = next(row for row in own_rows if row["id"] == first["id"])
+    assert saved["model_version"] == first["model_version"]
+
+
 # ---------------------------------------------------------------- uploads
 def demo_df():
     return pd.read_csv(SAMPLES / "policy_rules_demo.csv")

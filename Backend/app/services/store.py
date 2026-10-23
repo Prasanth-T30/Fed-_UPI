@@ -19,6 +19,7 @@ Session = sessionmaker(engine, expire_on_commit=False)
 class Txn(Base):
     __tablename__ = "scored_transactions"
     id = Column(Integer, primary_key=True)
+    owner_id = Column(Integer, nullable=True, index=True)
     txn_ref = Column(String, index=True)
     created_at = Column(DateTime, default=_utcnow, index=True)
     source = Column(String, default="api")           # api | upload | simulation
@@ -36,6 +37,7 @@ class Txn(Base):
     sender_id = Column(String, nullable=True, index=True)
     receiver_id = Column(String, nullable=True)
     txn_time = Column(DateTime, nullable=True, index=True)
+    model_version = Column(String, nullable=True)
 
 
 class User(Base):
@@ -69,16 +71,30 @@ def _migrate():
     """create_all never alters tables; add columns introduced after the first release."""
     from sqlalchemy import inspect, text
     cols = {c["name"] for c in inspect(engine).get_columns("scored_transactions")}
-    for name, typ in (("dataset_id", "INTEGER"), ("sender_id", "VARCHAR"), ("receiver_id", "VARCHAR"), ("txn_time", "DATETIME")):
+    additions = (
+        ("dataset_id", "INTEGER"),
+        ("sender_id", "VARCHAR"),
+        ("receiver_id", "VARCHAR"),
+        ("txn_time", "DATETIME"),
+        ("owner_id", "INTEGER"),
+        ("model_version", "VARCHAR"),
+    )
+    for name, typ in additions:
         if name not in cols:
             with engine.begin() as c:
                 c.execute(text(f"ALTER TABLE scored_transactions ADD COLUMN {name} {typ}"))
     # Cover the filters and ordering used by the dashboard, alerts and reports.
     # IF NOT EXISTS keeps startup cheap after the first migration.
     with engine.begin() as c:
+        c.execute(text(
+            "UPDATE scored_transactions "
+            "SET owner_id = (SELECT owner_id FROM datasets WHERE datasets.id = scored_transactions.dataset_id) "
+            "WHERE owner_id IS NULL AND dataset_id IS NOT NULL"
+        ))
         c.execute(text("CREATE INDEX IF NOT EXISTS ix_txn_truth_decision ON scored_transactions (ground_truth, decision)"))
         c.execute(text("CREATE INDEX IF NOT EXISTS ix_txn_status_id ON scored_transactions (status, id DESC)"))
         c.execute(text("CREATE INDEX IF NOT EXISTS ix_txn_decision_id ON scored_transactions (decision, id DESC)"))
+        c.execute(text("CREATE INDEX IF NOT EXISTS ix_txn_owner_id ON scored_transactions (owner_id, id DESC)"))
 
 
 _migrate()
@@ -176,9 +192,9 @@ def delete_dataset(owner_id, dataset_id):
         return stored
 
 
-def query_rows(decisions=None, status=None, dataset_id=None, limit=20000):
+def query_rows(owner_id, decisions=None, status=None, dataset_id=None, limit=20000):
     with Session() as s:
-        q = select(Txn).order_by(Txn.id.desc())
+        q = select(Txn).where(Txn.owner_id == owner_id).order_by(Txn.id.desc())
         if decisions:
             q = q.where(Txn.decision.in_(decisions))
         if status:
@@ -194,6 +210,7 @@ def row_dict(t: Txn, compact: bool = False) -> dict:
         "bank": t.bank, "category": t.category, "amount": t.amount, "risk_score": t.risk_score,
         "risk_level": t.risk_level, "decision": t.decision, "reasons": t.reasons or [],
         "ground_truth": t.ground_truth, "status": t.status, "dataset_id": t.dataset_id,
+        "model_version": t.model_version,
     }
     if not compact:
         row.update({
@@ -203,32 +220,37 @@ def row_dict(t: Txn, compact: bool = False) -> dict:
     return row
 
 
-def save(records: list) -> list:
+def save(owner_id: int, records: list) -> list:
     with Session() as s:
         objs = []
         for r in records:
             status = "open" if r["decision"] != "ALLOW" else "auto"
-            objs.append(Txn(status=status, **r))
+            objs.append(Txn(owner_id=owner_id, status=status, **r))
         s.add_all(objs)
         s.commit()
         return [row_dict(o) for o in objs]
 
 
-def overview() -> dict:
+def overview(owner_id: int) -> dict:
     with Session() as s:
         # Keep the indexed dashboard counters independent. SQLite can answer these
         # from the compact decision/status indexes without scanning JSON-heavy rows.
-        total = s.scalar(select(func.count(Txn.id))) or 0
-        by_dec = dict(s.execute(select(Txn.decision, func.count(Txn.id)).group_by(Txn.decision)).all())
-        blocked_amt = s.scalar(select(func.coalesce(func.sum(Txn.amount), 0)).where(Txn.decision == "BLOCK")) or 0
-        open_alerts = s.scalar(select(func.count(Txn.id)).where(Txn.status == "open")) or 0
-        confirmed = s.scalar(select(func.count(Txn.id)).where(Txn.status == "confirmed_fraud")) or 0
-        recent = s.execute(select(Txn).order_by(Txn.id.desc()).limit(60)).scalars().all()
+        owner = Txn.owner_id == owner_id
+        total = s.scalar(select(func.count(Txn.id)).where(owner)) or 0
+        by_dec = dict(
+            s.execute(select(Txn.decision, func.count(Txn.id)).where(owner).group_by(Txn.decision)).all()
+        )
+        blocked_amt = s.scalar(
+            select(func.coalesce(func.sum(Txn.amount), 0)).where(owner, Txn.decision == "BLOCK")
+        ) or 0
+        open_alerts = s.scalar(select(func.count(Txn.id)).where(owner, Txn.status == "open")) or 0
+        confirmed = s.scalar(select(func.count(Txn.id)).where(owner, Txn.status == "confirmed_fraud")) or 0
+        recent = s.execute(select(Txn).where(owner).order_by(Txn.id.desc()).limit(60)).scalars().all()
         # Aggregate simulation results in SQL. Never materialise the full table:
         # transaction rows contain large JSON feature and explanation fields.
         sim_counts = s.execute(
             select(Txn.ground_truth, Txn.decision, func.count(Txn.id))
-            .where(Txn.ground_truth.is_not(None))
+            .where(owner, Txn.ground_truth.is_not(None))
             .group_by(Txn.ground_truth, Txn.decision)
         ).all()
     tp = sum(count for truth, decision, count in sim_counts if truth == 1 and decision != "ALLOW")
@@ -244,9 +266,9 @@ def overview() -> dict:
     }
 
 
-def listing(decision=None, status=None, limit=100, offset=0):
+def listing(owner_id, decision=None, status=None, limit=100, offset=0):
     with Session() as s:
-        q = select(Txn).order_by(Txn.id.desc())
+        q = select(Txn).where(Txn.owner_id == owner_id).order_by(Txn.id.desc())
         if decision:
             q = q.where(Txn.decision == decision)
         if status:
@@ -255,9 +277,11 @@ def listing(decision=None, status=None, limit=100, offset=0):
         return [row_dict(r, compact=True) for r in rows]
 
 
-def set_status(txn_id: int, status: str):
+def set_status(owner_id: int, txn_id: int, status: str):
     with Session() as s:
-        t = s.get(Txn, txn_id)
+        t = s.execute(
+            select(Txn).where(Txn.id == txn_id, Txn.owner_id == owner_id)
+        ).scalar_one_or_none()
         if not t:
             return None
         t.status = status
@@ -265,9 +289,9 @@ def set_status(txn_id: int, status: str):
         return row_dict(t)
 
 
-def clear():
+def clear(owner_id: int):
     with Session() as s:
-        s.query(Txn).delete()
+        s.query(Txn).filter(Txn.owner_id == owner_id).delete()
         s.commit()
 
 
@@ -277,16 +301,26 @@ def delete_dataset_rows(dataset_id):
         s.commit()
 
 
-def history_counts(sender_id, receiver_id, at):
+def history_counts(owner_id, sender_id, receiver_id, at):
     """Prior payments (stored in the database) by this sender: last hour, last 24h, and to this receiver in 24h."""
     if not sender_id:
         return {"last_hour": 0, "last_24h": 0, "same_receiver_24h": 0, "minutes_since_last": None}
     day, hour = at - dt.timedelta(hours=24), at - dt.timedelta(hours=1)
     with Session() as s:
-        base = select(func.count(Txn.id)).where(Txn.sender_id == sender_id, Txn.txn_time < at)
+        base = select(func.count(Txn.id)).where(
+            Txn.owner_id == owner_id,
+            Txn.sender_id == sender_id,
+            Txn.txn_time < at,
+        )
         last_day = s.scalar(base.where(Txn.txn_time >= day)) or 0
         last_hour = s.scalar(base.where(Txn.txn_time >= hour)) or 0
         same = s.scalar(base.where(Txn.txn_time >= day, Txn.receiver_id == receiver_id)) if receiver_id else 0
-        prev = s.scalar(select(func.max(Txn.txn_time)).where(Txn.sender_id == sender_id, Txn.txn_time < at))
+        prev = s.scalar(
+            select(func.max(Txn.txn_time)).where(
+                Txn.owner_id == owner_id,
+                Txn.sender_id == sender_id,
+                Txn.txn_time < at,
+            )
+        )
     mins = round((at - prev).total_seconds() / 60, 1) if prev else None
     return {"last_hour": last_hour, "last_24h": last_day, "same_receiver_24h": same or 0, "minutes_since_last": mins}

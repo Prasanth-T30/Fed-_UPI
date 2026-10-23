@@ -43,6 +43,11 @@ if __name__ == "__main__":
     parser.add_argument("--dataset", choices=["paysim"], help="use an explicitly installed public dataset")
     parser.add_argument("--max-rows", type=int, default=150_000, help="maximum PaySim rows (all fraud retained)")
     parser.add_argument("--quick", action="store_true", help="skip comparison-only models")
+    parser.add_argument(
+        "--paper-protocol",
+        action="store_true",
+        help="use the paper's 16-unit MLP, 20 rounds, 2 local epochs and batch size 512",
+    )
     parser.add_argument("--no-activate", action="store_true")
     parser.add_argument("--use", metavar="NAME", help="activate an already trained artifact set")
     args = parser.parse_args()
@@ -78,7 +83,19 @@ if __name__ == "__main__":
         if progress.get("round") and (progress["round"] % 5 == 0 or progress["round"] == 1):
             print(f"  [{progress['stage']}] round {progress['round']:>2}  f1={progress['f1']:.3f} pr_auc={progress['pr_auc']:.3f}")
 
-    report, artifact = run_pipeline(frame, FedConfig(secure_agg=True), progress=show, full=not args.quick)
+    config = FedConfig(secure_agg=True)
+    if args.paper_protocol:
+        config = FedConfig(
+            kind="paper_mlp",
+            algorithm="fedavg",
+            rounds=20,
+            local_epochs=2,
+            lr=0.02,
+            batch_size=512,
+            seed=42,
+            secure_agg=True,
+        )
+    report, artifact = run_pipeline(frame, config, progress=show, full=not args.quick)
     report["dataset"]["name"] = name
     artifact["meta"]["dataset"] = name
     output = ARTIFACT_DIR / name

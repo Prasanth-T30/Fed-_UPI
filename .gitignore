@@ -11,6 +11,7 @@
 !**/.env.sample
 *.log
 backups/
+/tmp/
 Frontend/dist/
 Backend/*.db
 Backend/*.db-*
