@@ -5,6 +5,7 @@ from typing import Callable, Optional
 
 import numpy as np
 import pandas as pd
+import torch 
 from sklearn.ensemble import HistGradientBoostingClassifier
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import precision_recall_curve
@@ -12,7 +13,7 @@ from sklearn.metrics import precision_recall_curve
 from app.data.features import FEATURES, transform
 from app.ml.explain import attributions
 from app.ml.federated import Client, FedConfig, run_federation, scores
-from app.ml.metrics import best_threshold, evaluate, paper_threshold, recall_threshold
+from app.ml.metrics import best_threshold, evaluate, recall_threshold
 from app.ml import policy
 from app.ml.privacy import epsilon
 
@@ -45,15 +46,9 @@ def ae_norm(model, x, scale):
 def run_pipeline(df: pd.DataFrame, cfg: FedConfig, progress: Progress = None, full: bool = True):
     """full=True runs every baseline (for the research report); False = fast federated run."""
     t0 = time.time()
-
-    def say(stage, **details):
-        if progress:
-            progress({"stage": stage, **details})
-
+    say = lambda stage, **kw: progress and progress({"stage": stage, **kw})
     sp = split_by_bank(df, cfg.seed)
-    xtr, ytr = _xy(sp["train"])
-    xva, yva = _xy(sp["val"])
-    xte, yte = _xy(sp["test"])
+    xtr, ytr = _xy(sp["train"]); xva, yva = _xy(sp["val"]); xte, yte = _xy(sp["test"])
     clients = []
     for bank, g in sp["train"].groupby("bank", sort=True):
         x, y = _xy(g)
@@ -66,10 +61,6 @@ def run_pipeline(df: pd.DataFrame, cfg: FedConfig, progress: Progress = None, fu
     def test_metrics(model, kind="clf"):
         thr = best_threshold(yva, scores(model, kind, xva))
         return evaluate(yte, scores(model, kind, xte), thr)
-
-    def paper_metrics(model, x_val=xva, y_val=yva, x_test=xte, y_test=yte, kind="logistic"):
-        threshold = paper_threshold(y_val, scores(model, kind, x_val))
-        return evaluate(y_test, scores(model, kind, x_test), threshold)
 
     experiments = {}
     # --- main federated supervised model -------------------------------------------------
@@ -88,87 +79,14 @@ def run_pipeline(df: pd.DataFrame, cfg: FedConfig, progress: Progress = None, fu
         f = evaluate(yva, s, best_threshold(yva, s))["f1"]
         if f > best_f + 1e-9:
             best_w, best_f = w, f
-    def ensemble_scores(x):
-        return (1 - best_w) * scores(main_model, "clf", x) + best_w * ae_norm(ae_model, x, scale)
-
+    ens = lambda x: (1 - best_w) * scores(main_model, "clf", x) + best_w * ae_norm(ae_model, x, scale)
     # Keep a validation margin so recall remains robust on unseen bank/upload distributions.
-    thr = recall_threshold(yva, ensemble_scores(xva), minimum_recall=0.75)
-    experiments["ensemble"] = {
-        "label": "Federated MLP + Autoencoder",
-        "metrics": evaluate(yte, ensemble_scores(xte), thr),
-    }
+    thr = recall_threshold(yva, ens(xva), minimum_recall=0.75)
+    experiments["ensemble"] = {"label": "Federated MLP + Autoencoder", "metrics": evaluate(yte, ens(xte), thr)}
     ae_only_thr = best_threshold(yva, scores(ae_model, "ae", xva))
     experiments["autoencoder"] = {"label": "Federated Autoencoder (unsupervised)",
                                   "metrics": evaluate(yte, scores(ae_model, "ae", xte), ae_only_thr), "history": ae_hist}
     if full:
-        # Reproduce the paper's lightweight logistic comparison without replacing
-        # the stronger production ensemble.
-        paper_cfg = FedConfig(
-            kind="logistic",
-            algorithm="fedavg",
-            rounds=20,
-            local_epochs=2,
-            lr=0.07,
-            batch_size=512,
-            seed=42,
-        )
-        say("paper-logistic-fedavg")
-        logistic_fed, logistic_hist = run_federation(
-            clients,
-            xva,
-            yva,
-            paper_cfg,
-            on_round=lambda row: say("paper-logistic-fedavg", **row),
-        )
-        experiments["paper_fedavg_logistic"] = {
-            "label": "Paper protocol - FedAvg logistic",
-            "metrics": paper_metrics(logistic_fed),
-            "history": logistic_hist,
-        }
-
-        say("paper-logistic-centralized")
-        logistic_central, _ = run_federation(
-            [Client("all", xtr, ytr)], xva, yva, paper_cfg
-        )
-        experiments["paper_central_logistic"] = {
-            "label": "Paper protocol - Centralized logistic",
-            "metrics": paper_metrics(logistic_central),
-        }
-
-        say("paper-logistic-local")
-        local_results = []
-        metric_keys = ("precision", "recall", "f1", "accuracy", "fpr", "roc_auc", "pr_auc")
-        for client in clients:
-            val = sp["val"][sp["val"].bank == client.name]
-            test = sp["test"][sp["test"].bank == client.name]
-            x_local_val, y_local_val = _xy(val)
-            x_local_test, y_local_test = _xy(test)
-            local_model, _ = run_federation([client], x_local_val, y_local_val, paper_cfg)
-            local_results.append({
-                "bank": client.name,
-                "rows": len(test),
-                **paper_metrics(
-                    local_model,
-                    x_local_val,
-                    y_local_val,
-                    x_local_test,
-                    y_local_test,
-                ),
-            })
-        total_local_rows = sum(result["rows"] for result in local_results)
-        local_average = {
-            key: round(
-                sum(result[key] * result["rows"] for result in local_results) / total_local_rows,
-                4,
-            )
-            for key in metric_keys
-        }
-        experiments["paper_local_logistic"] = {
-            "label": "Paper protocol - Local-only logistic",
-            "metrics": local_average,
-            "per_bank": local_results,
-        }
-
         say("federated-fedprox")
         m, h = fed(clients, algorithm="fedprox")
         experiments["fedprox"] = {"label": "Federated FedProx", "metrics": test_metrics(m), "history": h}
@@ -201,11 +119,11 @@ def run_pipeline(df: pd.DataFrame, cfg: FedConfig, progress: Progress = None, fu
             m, _ = fed([c], algorithm="fedavg")
             locs.append({"bank": c.name, **test_metrics(m)})
         keys = ["precision", "recall", "f1", "roc_auc", "pr_auc", "accuracy", "fpr"]
-        avg = {k: round(float(np.mean([result[k] for result in locs])), 4) for k in keys}
+        avg = {k: round(float(np.mean([l[k] for l in locs])), 4) for k in keys}
         experiments["local_only"] = {"label": "Local-only (each bank alone, mean)", "metrics": avg, "per_bank": locs}
 
     # --- final model analytics -----------------------------------------------------------
-    final_scores = ensemble_scores(xte)
+    final_scores = ens(xte)
     review_thr = round(thr * 0.5, 4)
     prec, rec, _ = precision_recall_curve(yte, final_scores)
     step = max(1, len(prec) // 60)
@@ -278,7 +196,7 @@ def run_pipeline(df: pd.DataFrame, cfg: FedConfig, progress: Progress = None, fu
     }
     artifacts = {"mlp": main_model.state_dict(), "ae": ae_model.state_dict(),
                  "meta": {"threshold": float(thr), "review_threshold": review_thr, "ensemble_weight": best_w,
-                          "ae_scale": scale, "n_features": len(FEATURES), "model_kind": cfg.kind}}
+                          "ae_scale": scale, "n_features": len(FEATURES)}}
     return report, artifacts
 
 
