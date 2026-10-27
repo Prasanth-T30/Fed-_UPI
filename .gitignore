@@ -20,7 +20,9 @@ Backend/data/raw/
 Backend/data/paysim_transactions.csv
 
 # User-supplied and generated datasets
-/samples/
+/samples/*
+!/samples/policy_rules_demo.csv
+!/samples/upi_test_transactions.csv
 /Backend/data/*.csv
 /Backend/data/*.tsv
 /Backend/data/*.xlsx
@@ -36,3 +38,5 @@ Backend/data/paysim_transactions.csv
 *.rtf
 /docs/
 /documents/
+
+/Backend/app/data/archive.zip

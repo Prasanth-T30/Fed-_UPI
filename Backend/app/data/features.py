@@ -15,6 +15,15 @@ NUMERIC = [
 OPTIONAL = ["balance_drain", "dest_empty", "sender_txn_24h", "same_receiver_24h"]
 FEATURES = NUMERIC + [f"cat_{c}" for c in CATEGORIES]
 
+# The conference experiment deliberately uses a compact, fixed 13-value vector.
+# Keep it separate from the richer production feature set so the paper preset is
+# reproducible without removing the practical extensions used by the app.
+PAPER_FEATURES = [
+    "log_amount", "amount_ratio", "hour_sin", "hour_cos", "account_age",
+    "txn_velocity", "failed_logins", "pin_failures", "new_device",
+    "new_beneficiary", "collect_request", "weekend", "merchant_risk",
+]
+
 # Human readable label per feature, used for explanations.
 LABELS = {
     "log_amount": "High transaction amount",
@@ -71,3 +80,30 @@ def transform(df: pd.DataFrame) -> np.ndarray:
     for c in CATEGORIES:
         cols[f"cat_{c}"] = (df["merchant_category"].astype(str).str.lower() == c).astype(float)
     return np.column_stack([np.asarray(cols[f], dtype=np.float32) for f in FEATURES]).astype(np.float32)
+
+
+def transform_paper(df: pd.DataFrame) -> np.ndarray:
+    """Return the paper's 13-input feature vector with fixed local-safe scaling."""
+    missing = [c for c in REQUIRED if c not in df.columns]
+    if missing:
+        raise ValueError(f"Missing columns: {', '.join(missing)}")
+    amount = df["amount_inr"].astype(float).clip(lower=0)
+    hour = df["transaction_hour"].astype(float) * 2 * np.pi / 24
+    category = df["merchant_category"].astype(str).str.lower()
+    merchant_risk = category.map({"p2p": 0.25, "merchant": 0.5, "investment": 1.0}).fillna(0.25)
+    cols = {
+        "log_amount": np.log1p(amount) / 12,
+        "amount_ratio": np.log1p(df["amount_to_average_ratio"].astype(float).clip(0, 50)) / 3,
+        "hour_sin": np.sin(hour),
+        "hour_cos": np.cos(hour),
+        "account_age": np.log1p(df["account_age_days"].astype(float).clip(lower=0)) / 9,
+        "txn_velocity": (df["transactions_last_hour"].astype(float) / 10).clip(0, 1),
+        "failed_logins": (df["failed_login_attempts_24h"].astype(float) / 8).clip(0, 1),
+        "pin_failures": (df["upi_pin_failures_24h"].astype(float) / 6).clip(0, 1),
+        "new_device": df["is_new_device"].astype(float),
+        "new_beneficiary": df["is_new_beneficiary"].astype(float),
+        "collect_request": df["is_collect_request"].astype(float),
+        "weekend": df["is_weekend"].astype(float),
+        "merchant_risk": merchant_risk.astype(float),
+    }
+    return np.column_stack([np.asarray(cols[name], dtype=np.float32) for name in PAPER_FEATURES]).astype(np.float32)

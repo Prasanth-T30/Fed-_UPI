@@ -8,7 +8,7 @@ import pandas as pd
 import torch
 
 from app.config import META_PATH, MODEL_PATH, MODEL_VERSION
-from app.data.features import FEATURES, LABELS, transform
+from app.data.features import FEATURES, LABELS, PAPER_FEATURES, transform, transform_paper
 from app.ml.explain import attributions
 from app.ml import policy
 from app.ml.federated import make_model, scores
@@ -63,7 +63,9 @@ class ModelService:
         if not self.ready:
             raise RuntimeError("Model not trained yet. Run backend.ps1 (it trains on first start) or use the Federated Lab.")
         df = df.reset_index(drop=True)
-        x = transform(df)
+        paper_profile = self.meta.get("feature_profile") == "paper"
+        x = transform_paper(df) if paper_profile else transform(df)
+        feature_names = PAPER_FEATURES if paper_profile else FEATURES
         w, scale = self.meta["ensemble_weight"], self.meta["ae_scale"]
         p = scores(self.mlp, "clf", x)
         a = np.clip(scores(self.ae, "ae", x) / scale, 0, 1)
@@ -95,7 +97,7 @@ class ModelService:
                 rules.append("model")
             if explain and level[i] > 0:
                 merged = {}
-                for f, v in zip(FEATURES, attr[i]):
+                for f, v in zip(feature_names, attr[i]):
                     if f.startswith("cat_") or v <= 0 or f in ("amount_moderate", "amount_high", "same_receiver", "sender_24h"):
                         continue
                     key = "hour" if f.startswith("hour_") else f

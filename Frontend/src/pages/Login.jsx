@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { ShieldCheck, Moon, Sun } from "lucide-react";
+import { Activity, Building2, LockKeyhole, Moon, ShieldCheck, Sparkles, Sun } from "lucide-react";
 import { useAuth, useTheme } from "../context";
 
 export default function Login() {
@@ -30,18 +30,33 @@ export default function Login() {
     <div className="auth">
       <button className="icon-btn auth-theme" onClick={toggle} aria-label="Toggle theme">{theme === "dark" ? <Sun size={18} /> : <Moon size={18} />}</button>
       <section className="auth-hero">
-        <div className="brand big"><ShieldCheck size={30} /><b>FedUPI</b></div>
-        <h1>Fraud detection that never moves your data.</h1>
-        <p>Banks train one shared model on UPI patterns while every transaction stays inside its own walls. Sign in to monitor, investigate and export.</p>
-        <ul>
-          <li>Federated learning with secure aggregation</li>
-          <li>Plain-language reasons for every decision</li>
-          <li>Upload data, download fraud reports in Excel, Word, PDF or CSV</li>
-        </ul>
+        <div className="auth-copy">
+          <div className="brand big"><span className="brand-mark"><ShieldCheck size={24} /></span><div><b>FedUPI</b><small>Privacy-first fraud intelligence</small></div></div>
+          <span className="auth-kicker"><Sparkles size={14} /> Collaborative intelligence. Private by design.</span>
+          <h1>One fraud shield.<br /><em>Five private banks.</em></h1>
+          <p>Detect suspicious UPI activity with a shared model while each institution keeps its transaction records local.</p>
+          <div className="auth-proof">
+            <span><LockKeyhole size={15} /> Raw data stays local</span>
+            <span><Activity size={15} /> Live risk decisions</span>
+          </div>
+        </div>
+        <div className="federation-visual" aria-label="Animated federated learning network">
+          <div className="visual-glow" />
+          <div className="orbit orbit-one" /><div className="orbit orbit-two" /><div className="orbit orbit-three" />
+          <div className="visual-core"><ShieldCheck size={29} /><b>Global</b><small>FedAvg model</small><i /></div>
+          {["A", "B", "C", "D", "E"].map((bank, index) => (
+            <div className={`bank-node bank-${index + 1}`} key={bank}>
+              <Building2 size={15} /><b>Bank {bank}</b><span>local weights</span>
+            </div>
+          ))}
+          <div className="signal signal-one" /><div className="signal signal-two" /><div className="signal signal-three" />
+          <div className="privacy-chip"><LockKeyhole size={13} /> 0 raw records shared</div>
+        </div>
       </section>
       <form className="auth-card" onSubmit={submit}>
-        <h2>{mode === "login" ? "Welcome back" : "Create your account"}</h2>
-        <p className="muted">{mode === "login" ? "Sign in to continue to your dashboard." : "Takes less than a minute."}</p>
+        <div className="auth-card-top"><span>Secure workspace</span><i><LockKeyhole size={13} /> Encrypted session</i></div>
+        <h2>{mode === "login" ? "Welcome back" : "Join FedUPI"}</h2>
+        <p className="muted">{mode === "login" ? "Sign in to open your fraud operations workspace." : "Create your analyst account. You will sign in after registration."}</p>
         {mode === "register" && (
           <>
             <label>Full name<input value={f.name} onChange={set("name")} required minLength={2} autoComplete="name" /></label>
@@ -54,7 +69,7 @@ export default function Login() {
           {mode === "register" && <small>At least 8 characters.</small>}</label>
         {notice && <div className="note good" role="status">{notice}</div>}
         {err && <div className="note bad" role="alert">{err}</div>}
-        <button className="btn wide" disabled={busy}>{busy ? "Please wait…" : mode === "login" ? "Sign in" : "Create account"}</button>
+        <button className="btn wide auth-submit" disabled={busy}>{busy ? <><span className="button-spinner" /> Verifying…</> : mode === "login" ? <>Open secure workspace <span>→</span></> : <>Create analyst account <span>→</span></>}</button>
         <p className="switch">
           {mode === "login" ? "New here?" : "Already registered?"}{" "}
           <a href="#" onClick={(e) => { e.preventDefault(); setErr(""); setNotice(""); setMode(mode === "login" ? "register" : "login"); }}>

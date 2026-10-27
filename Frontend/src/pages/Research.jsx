@@ -4,9 +4,9 @@ import { api } from "../services/api";
 import { Card, Page } from "../components/ui";
 
 const MODULES = [
-  ["Data layer", "UPI-style generator, 5 banks, 6 fraud typologies, fixed-scale feature engineering."],
+  ["Data layer", "UPI-style generator, 5 banks, 7 fraud typologies, fixed-scale feature engineering."],
   ["Federated engine", "FedAvg, FedProx, DP clipping + noise; parameters-only communication."],
-  ["AI models", "Paper-compatible logistic and 16-unit MLP comparisons, plus the enhanced MLP and autoencoder production scorer."],
+  ["AI models", "A reproducible 13-input paper profile with logistic and 16-unit MLP comparisons, plus the enhanced production profile."],
   ["Explainability", "Per-transaction gradient×input attribution turned into plain-language reasons."],
   ["Risk policy", "High risk only above ₹99,999; moderate for ₹70,000–99,999, repeated payments to one receiver, or model-flagged; risk % per payment."],
   ["Analyst loop", "Alert queue, confirm/dismiss labels stored for retraining."],

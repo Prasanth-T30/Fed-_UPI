@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import {
-  Activity, AlertTriangle, ArrowRight, CheckCircle2, Database,
-  RefreshCw, ScanSearch, ShieldCheck, Upload,
+  Activity, AlertTriangle, ArrowRight, CheckCircle2, Clock3, Database,
+  Network, RefreshCw, ScanSearch, ShieldAlert, Upload,
 } from "lucide-react";
 import {
   Area, AreaChart, Bar, BarChart, CartesianGrid, Cell,
@@ -17,6 +17,14 @@ const QuickAction = ({ to, icon: Icon, title, text }) => (
     <span><b>{title}</b><small>{text}</small></span>
     <ArrowRight size={17} />
   </Link>
+);
+
+const Kpi = ({ icon: Icon, label, value, detail, tone = "blue" }) => (
+  <article className={`kpi ${tone}`}>
+    <div className="kpi-top"><span className="kpi-icon"><Icon size={18} /></span><small>{label}</small></div>
+    <strong>{value}</strong>
+    <p>{detail}</p>
+  </article>
 );
 
 const LoadingDashboard = () => (
@@ -101,26 +109,34 @@ export default function Dashboard() {
       sub="Monitor risk, review alerts and understand how the federated fraud model is performing."
       actions={<button className="btn ghost" onClick={load}><RefreshCw size={15} /> Refresh</button>}
     >
-      <section className="dashboard-hero">
-        <div>
-          <span className="eyebrow"><ShieldCheck size={15} /> Federated protection active</span>
-          <h2>{o.open_alerts ? `${o.open_alerts.toLocaleString()} alerts need review` : "No alerts waiting for review"}</h2>
-          <p>{o.total.toLocaleString()} transactions scored · {pct(flaggedRate)} flagged for additional checks</p>
+      <section className="dashboard-hero premium">
+        <div className="hero-grid" />
+        <div className="hero-copy">
+          <span className="eyebrow"><i /> Federated protection live</span>
+          <h2>{o.open_alerts ? `${o.open_alerts.toLocaleString()} cases require attention` : "Your risk queue is clear"}</h2>
+          <p>The shared model has screened <b>{o.total.toLocaleString()}</b> payments while transaction data remains inside each institution.</p>
+          <div className="hero-actions">
+            <Link className="btn light" to={o.open_alerts ? "/alerts" : "/monitor"}>
+              {o.open_alerts ? "Review priority cases" : "Open live monitor"} <ArrowRight size={16} />
+            </Link>
+            <Link className="hero-link" to="/check">Check a transaction</Link>
+          </div>
         </div>
-        <Link className="btn" to={o.open_alerts ? "/alerts" : "/monitor"}>
-          {o.open_alerts ? "Review alert queue" : "Open live monitor"} <ArrowRight size={16} />
-        </Link>
+        <div className="hero-status">
+          <div className="status-ring"><span>{pct(1 - flaggedRate, 1)}</span><small>cleared</small></div>
+          <div><small>Network status</small><b><i /> 5 banks connected</b><span>{model ? `${model.algorithm.toUpperCase()} · model ready` : "Awaiting trained model"}</span></div>
+        </div>
       </section>
 
-      <div className="grid stats dashboard-stats">
-        <Stat label="Transactions scored" value={o.total.toLocaleString()} sub="Across uploads and live checks" />
-        <Stat label="High-risk blocked" value={o.blocked.toLocaleString()} tone="red" sub={`${inr(o.blocked_amount)} protected`} />
-        <Stat label="Moderate risk" value={o.step_up.toLocaleString()} tone="amber" sub="Sent for step-up authentication" />
-        <Stat label="Open alerts" value={o.open_alerts.toLocaleString()} sub={`${o.confirmed_fraud.toLocaleString()} confirmed fraud cases`} />
+      <div className="dashboard-kpis">
+        <Kpi icon={Activity} label="Transactions screened" value={o.total.toLocaleString()} detail="Uploads and live checks" />
+        <Kpi icon={ShieldAlert} label="High risk blocked" value={o.blocked.toLocaleString()} detail={`${inr(o.blocked_amount)} protected`} tone="red" />
+        <Kpi icon={Clock3} label="Step-up checks" value={o.step_up.toLocaleString()} detail="Moderate-risk payments" tone="amber" />
+        <Kpi icon={CheckCircle2} label="Confirmed cases" value={o.confirmed_fraud.toLocaleString()} detail={`${o.open_alerts.toLocaleString()} still open`} tone="green" />
       </div>
 
       <div className="grid two dashboard-charts">
-        <Card title="Risk score activity" hint="Latest 60 scored transactions">
+        <Card title="Risk signal" hint="Latest 60 scored transactions" className="chart-card">
           {o.recent.length ? (
             <ResponsiveContainer width="100%" height={250}>
               <AreaChart data={o.recent.map((row, index) => ({ index: index + 1, score: row.risk_score }))}>
@@ -135,7 +151,7 @@ export default function Dashboard() {
           ) : <div className="chart-empty"><Activity size={25} /><b>No activity yet</b><span>Upload data or start the live monitor to populate this chart.</span></div>}
         </Card>
 
-        <Card title="Decision distribution" hint={`${totalFlagged.toLocaleString()} transactions flagged`}>
+        <Card title="Decision mix" hint={`${totalFlagged.toLocaleString()} payments need friction`} className="chart-card">
           {o.total ? (
             <ResponsiveContainer width="100%" height={250}>
               <BarChart data={riskMix} margin={{ left: 4, right: 4 }}>
@@ -150,8 +166,8 @@ export default function Dashboard() {
         </Card>
       </div>
 
-      <div className="grid two wide-left">
-        <Card title="Quick actions" hint="Common analyst workflows">
+      <div className="grid two wide-left operations-row">
+        <Card title="Analyst launchpad" hint="Continue an investigation">
           <div className="quick-grid">
             <QuickAction to="/upload" icon={Upload} title="Upload dataset" text="Score a new transaction file" />
             <QuickAction to="/check" icon={ScanSearch} title="Check transaction" text="Assess one payment instantly" />
@@ -159,9 +175,10 @@ export default function Dashboard() {
           </div>
         </Card>
 
-        <Card title="Detection health" hint="Current operational indicators">
+        <Card title="System posture" hint="Current operational indicators">
           <div className="health-list">
             <div><span><CheckCircle2 size={17} /> Model status</span><b className={model ? "good-text" : "warn-text"}>{model ? "Ready" : "Unavailable"}</b></div>
+            <div><span><Network size={17} /> Federation</span><b>5 institutions</b></div>
             <div><span>Labelled fraud capture</span><b>{labelledFraud ? pct(captureRate) : "No labelled data"}</b></div>
             <div><span>False alarms observed</span><b>{o.label_accuracy.false_alarms.toLocaleString()}</b></div>
             <div><span>Model version</span><b className="mono">{model?.version || "—"}</b></div>

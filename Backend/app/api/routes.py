@@ -53,6 +53,34 @@ def integer_arg(name):
 
 PAPERS = [
     {
+        "title": "FedUPI: Federated Learning Empowered Detection of Fraudulent UPI Transactions",
+        "authors": "Devassy et al.",
+        "venue": "ICSCSA 2025",
+        "url": "https://doi.org/10.1109/ICSCSA66339.2025.11170880",
+        "used_for": "UPI-specific federated architecture and cross-institution collaboration.",
+    },
+    {
+        "title": "Transparency and Privacy: Explainable AI and Federated Learning in Financial Fraud Detection",
+        "authors": "Awosika, Shukla and Pranggono",
+        "venue": "IEEE Access 2024",
+        "url": "https://doi.org/10.1109/ACCESS.2024.3394528",
+        "used_for": "Interpretability and privacy considerations for federated fraud models.",
+    },
+    {
+        "title": "Secure UPI: Machine Learning-Driven Fraud Detection System for UPI Transactions",
+        "authors": "Rani, Alam and Javed",
+        "venue": "ICDT 2024",
+        "url": "https://doi.org/10.1109/ICDT61202.2024.10489682",
+        "used_for": "UPI transaction features and real-time alerting context.",
+    },
+    {
+        "title": "Scalable Federated Learning for Privacy-Preserving Credit Card Fraud Detection",
+        "authors": "D'Souza, Puthusseri and Samuel",
+        "venue": "IEEE ICCST 2023",
+        "url": "https://ieeexplore.ieee.org/document/10726848",
+        "used_for": "Cross-institution fraud learning under class imbalance.",
+    },
+    {
         "title": (
             "Communication-Efficient Learning of Deep Networks from "
             "Decentralized Data (FedAvg)"
@@ -74,18 +102,6 @@ PAPERS = [
     },
     {
         "title": (
-            "Learning Differentially Private Recurrent Language Models "
-            "(DP-FedAvg)"
-        ),
-        "authors": "McMahan et al.",
-        "venue": "ICLR 2018",
-        "url": "https://arxiv.org/abs/1710.06963",
-        "used_for": (
-            "Update clipping + Gaussian noise used in the privacy option."
-        ),
-    },
-    {
-        "title": (
             "Practical Secure Aggregation for Privacy-Preserving "
             "Machine Learning"
         ),
@@ -98,70 +114,32 @@ PAPERS = [
         ),
     },
     {
-        "title": "Federated Machine Learning: Concept and Applications",
-        "authors": "Yang, Liu, Chen, Tong",
-        "venue": "ACM TIST 2019",
-        "url": "https://arxiv.org/abs/1902.04885",
-        "used_for": "Horizontal federated learning across institutions.",
+        "title": "The Algorithmic Foundations of Differential Privacy",
+        "authors": "Dwork and Roth",
+        "venue": "Foundations and Trends in Theoretical Computer Science 2014",
+        "url": "https://doi.org/10.1561/0400000042",
+        "used_for": "Formal privacy framing and the optional differential-privacy extension.",
     },
     {
-        "title": (
-            "FFD: A Federated Learning Based Method for Credit Card "
-            "Fraud Detection"
-        ),
-        "authors": "Yang et al.",
-        "venue": "Big Data - BigData 2019",
-        "url": "https://link.springer.com/chapter/10.1007/978-3-030-23551-2_2",
-        "used_for": (
-            "Federated fraud detection across banks; closest classic baseline."
-        ),
+        "title": "A Unified Approach to Interpreting Model Predictions",
+        "authors": "Lundberg and Lee",
+        "venue": "NeurIPS 2017",
+        "url": "https://proceedings.neurips.cc/paper/2017/hash/8a20a8621978632d76c43dfd28b67767-Abstract.html",
+        "used_for": "Future explainability direction identified by the paper.",
     },
     {
-        "title": (
-            "Privacy-Preserving Federated Fraud Detection in Payment "
-            "Transactions with NVIDIA FLARE"
-        ),
-        "authors": "arXiv 2603.13617",
-        "venue": "arXiv 2026",
-        "url": "https://arxiv.org/abs/2603.13617",
-        "used_for": (
-            "Federated vs centralized vs local-only comparison, "
-            "interpretability and DP trade-offs."
-        ),
+        "title": "Flower: A Friendly Federated Learning Research Framework",
+        "authors": "Beutel et al.",
+        "venue": "arXiv 2020",
+        "url": "https://arxiv.org/abs/2007.14390",
+        "used_for": "Reference framework for a future multi-process deployment.",
     },
     {
-        "title": (
-            "FedUpi: Federated Learning for Fraudulent UPI "
-            "Transaction Detection"
-        ),
-        "authors": "Sreeji et al.",
-        "venue": "IJRASET 2026",
-        "url": "https://www.ijraset.com/best-journal/fedupi-federated-learning-for-fraud-detection",
-        "used_for": "UPI-specific velocity features and imbalance handling.",
-    },
-    {
-        "title": (
-            "Hybrid Deep Learning Models for Real-Time UPI Fraud Detection"
-        ),
-        "authors": "IJRASET review",
-        "venue": "IJRASET",
-        "url": (
-            "https://www.ijraset.com/research-paper/"
-            "hybrid-deep-learning-models-for-real-time-upi-fraud-detection"
-        ),
-        "used_for": (
-            "Motivation: lack of public UPI datasets, case for federated "
-            "approaches."
-        ),
-    },
-    {
-        "title": (
-            "Federated Learning for Fraud Detection: Credit Card and Banking"
-        ),
-        "authors": "ITM Web Conf. 2025",
-        "venue": "DAI 2024",
-        "url": "https://www.itm-conferences.org/10.1051/itmconf/20257003030",
-        "used_for": "Survey of cross-institution federated fraud detection.",
+        "title": "PaySim: A Financial Mobile Money Simulator for Fraud Detection",
+        "authors": "Lopez-Rojas, Elmir and Axelsson",
+        "venue": "EMSS 2016",
+        "url": "https://github.com/EdgarLopezPhD/PaySim",
+        "used_for": "Public simulation context and the optional PaySim data adapter.",
     },
 ]
 

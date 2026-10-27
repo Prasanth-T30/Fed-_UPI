@@ -10,7 +10,7 @@ from sklearn.ensemble import HistGradientBoostingClassifier
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import precision_recall_curve
 
-from app.data.features import FEATURES, transform
+from app.data.features import FEATURES, PAPER_FEATURES, transform, transform_paper
 from app.ml.explain import attributions
 from app.ml.federated import Client, FedConfig, run_federation, scores
 from app.ml.metrics import best_threshold, evaluate, recall_threshold
@@ -30,8 +30,9 @@ def split_by_bank(df: pd.DataFrame, seed: int):
     return {k: pd.concat(v, ignore_index=True) for k, v in parts.items()}
 
 
-def _xy(df):
-    return transform(df), df.is_fraud.to_numpy(dtype=np.int64)
+def _xy(df, paper=False):
+    values = transform_paper(df) if paper else transform(df)
+    return values, df.is_fraud.to_numpy(dtype=np.int64)
 
 
 def ae_normaliser(model, x_val, y_val):
@@ -48,10 +49,11 @@ def run_pipeline(df: pd.DataFrame, cfg: FedConfig, progress: Progress = None, fu
     t0 = time.time()
     say = lambda stage, **kw: progress and progress({"stage": stage, **kw})
     sp = split_by_bank(df, cfg.seed)
-    xtr, ytr = _xy(sp["train"]); xva, yva = _xy(sp["val"]); xte, yte = _xy(sp["test"])
+    paper = cfg.kind == "paper_mlp"
+    xtr, ytr = _xy(sp["train"], paper); xva, yva = _xy(sp["val"], paper); xte, yte = _xy(sp["test"], paper)
     clients = []
     for bank, g in sp["train"].groupby("bank", sort=True):
-        x, y = _xy(g)
+        x, y = _xy(g, paper)
         clients.append(Client(bank, x, y))
 
     def fed(c_list, **over):
@@ -87,6 +89,36 @@ def run_pipeline(df: pd.DataFrame, cfg: FedConfig, progress: Progress = None, fu
     experiments["autoencoder"] = {"label": "Federated Autoencoder (unsupervised)",
                                   "metrics": evaluate(yte, scores(ae_model, "ae", xte), ae_only_thr), "history": ae_hist}
     if full:
+        if paper:
+            say("paper-logistic")
+            logistic, logistic_hist = fed(clients, kind="logistic", algorithm="fedavg", lr=0.07)
+            experiments["paper_federated_logistic"] = {
+                "label": "Paper FedAvg logistic",
+                "metrics": test_metrics(logistic, "logistic"),
+                "history": logistic_hist,
+            }
+            centralized_logistic, _ = fed(
+                [Client("all", xtr, ytr)], kind="logistic", algorithm="fedavg", lr=0.07
+            )
+            experiments["paper_centralized_logistic"] = {
+                "label": "Paper centralized logistic",
+                "metrics": test_metrics(centralized_logistic, "logistic"),
+            }
+            local_metrics = []
+            local_weights = []
+            for client in clients:
+                local_model, _ = fed([client], kind="logistic", algorithm="fedavg", lr=0.07)
+                local_metrics.append(test_metrics(local_model, "logistic"))
+                local_weights.append(client.n)
+            total_weight = sum(local_weights)
+            keys = ["precision", "recall", "f1", "roc_auc", "pr_auc", "accuracy", "fpr"]
+            experiments["paper_local_logistic"] = {
+                "label": "Paper institution-only logistic",
+                "metrics": {
+                    key: round(sum(m[key] * w for m, w in zip(local_metrics, local_weights)) / total_weight, 4)
+                    for key in keys
+                },
+            }
         say("federated-fedprox")
         m, h = fed(clients, algorithm="fedprox")
         experiments["fedprox"] = {"label": "Federated FedProx", "metrics": test_metrics(m), "history": h}
@@ -155,7 +187,7 @@ def run_pipeline(df: pd.DataFrame, cfg: FedConfig, progress: Progress = None, fu
     }
     fraud_x = xte[yte == 1][:400]
     importance = np.abs(attributions(main_model, fraud_x)).mean(axis=0)
-    imp = _merge_importance(importance)
+    imp = _merge_importance(importance, PAPER_FEATURES if paper else FEATURES)
     hist_bins = np.linspace(0, 1, 21)
     report = {
         "generated_at": time.strftime("%Y-%m-%d %H:%M:%S"),
@@ -196,14 +228,15 @@ def run_pipeline(df: pd.DataFrame, cfg: FedConfig, progress: Progress = None, fu
     }
     artifacts = {"mlp": main_model.state_dict(), "ae": ae_model.state_dict(),
                  "meta": {"threshold": float(thr), "review_threshold": review_thr, "ensemble_weight": best_w,
-                          "ae_scale": scale, "n_features": len(FEATURES)}}
+                          "ae_scale": scale, "n_features": len(PAPER_FEATURES) if paper else len(FEATURES),
+                          "model_kind": cfg.kind, "feature_profile": "paper" if paper else "extended"}}
     return report, artifacts
 
 
-def _merge_importance(imp: np.ndarray):
+def _merge_importance(imp: np.ndarray, feature_names=FEATURES):
     from app.data.features import LABELS
     merged = {}
-    for f, v in zip(FEATURES, imp):
+    for f, v in zip(feature_names, imp):
         label = LABELS.get(f)
         if label:
             merged[label] = merged.get(label, 0.0) + float(v)

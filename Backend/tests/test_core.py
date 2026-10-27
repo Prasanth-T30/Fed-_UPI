@@ -2,7 +2,7 @@
 import pytest
 import torch
 
-from app.data.features import FEATURES, transform
+from app.data.features import FEATURES, PAPER_FEATURES, transform, transform_paper
 from app.data.generator import generate
 from app.ml.federated import Client, FedConfig, aggregate, make_model, run_federation
 from app.ml.metrics import best_threshold, evaluate, paper_threshold, recall_threshold
@@ -61,6 +61,13 @@ def test_research_paper_models_and_threshold_grid():
     threshold = paper_threshold(y, scores)
     assert 0.10 <= threshold <= 0.95
     assert round(threshold, 2) == threshold
+
+
+def test_research_paper_feature_profile_is_fixed_to_13_inputs(df):
+    values = transform_paper(df)
+    assert len(PAPER_FEATURES) == 13
+    assert values.shape == (len(df), 13)
+    assert np.isfinite(values).all()
 
 
 def test_recall_threshold_meets_target_and_prefers_highest_cutoff():

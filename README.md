@@ -1,6 +1,8 @@
 # FedUPI
 
-Run the Flask backend and React frontend in **two separate terminals**. The launchers install missing dependencies, prevent duplicate servers, use fixed ports, and keep backend memory bounded.
+Run the Flask backend and React frontend in **two separate terminals**. The launchers install missing dependencies, use predictable local ports, and keep backend startup straightforward.
+
+See [PROJECT_STRUCTURE.md](PROJECT_STRUCTURE.md) for the source layout and request flow.
 
 ## Requirements
 
@@ -97,7 +99,7 @@ Linux/macOS uses `./.venv/bin/python` for the final command.
 
 ## Training data
 
-FedUPI does not generate or silently substitute demo transactions. Uploads and API-scored transactions are the only records shown by the application.
+FedUPI does not generate or silently substitute dashboard transactions. Uploads and API-scored transactions are the only records shown by the application. The tracked `samples/` files are limited to automated tests and an explicit policy demonstration.
 
 Federated Lab trains from the signed-in user's newest uploaded dataset. The file must contain a fraud label such as `is_fraud`, `fraud`, `label` or `class`, with both legitimate and fraudulent rows.
 
