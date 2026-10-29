@@ -40,3 +40,6 @@ Backend/data/paysim_transactions.csv
 /documents/
 
 /Backend/app/data/archive.zip
+tmp/
+samples/
+papers/
