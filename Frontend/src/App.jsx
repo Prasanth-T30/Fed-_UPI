@@ -42,7 +42,7 @@ const NAV = [
   ["/", "Dashboard", LayoutDashboard],
   ["/monitor", "Live Monitor", Activity],
   ["/check", "Check Transaction", ScanSearch],
-  ["/upload", "Upload & Datasets", Upload],
+  ["/upload", "Upload & Analyze", Upload],
   ["/alerts", "Alert Queue", BellRing],
   ["/reports", "Downloads", Download],
   ["/lab", "Federated Lab", FlaskConical],

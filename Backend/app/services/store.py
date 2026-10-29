@@ -266,13 +266,15 @@ def overview(owner_id: int) -> dict:
     }
 
 
-def listing(owner_id, decision=None, status=None, limit=100, offset=0):
+def listing(owner_id, decision=None, status=None, dataset_id=None, limit=100, offset=0):
     with Session() as s:
         q = select(Txn).where(Txn.owner_id == owner_id).order_by(Txn.id.desc())
         if decision:
             q = q.where(Txn.decision == decision)
         if status:
             q = q.where(Txn.status == status)
+        if dataset_id:
+            q = q.where(Txn.dataset_id == dataset_id)
         rows = s.execute(q.limit(limit).offset(offset)).scalars().all()
         return [row_dict(r, compact=True) for r in rows]
 

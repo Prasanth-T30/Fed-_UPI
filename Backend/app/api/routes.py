@@ -443,8 +443,9 @@ def transactions():
     status = request.args.get("status")
     limit = integer_arg("limit") or 100
     offset = integer_arg("offset") or 0
+    dataset_id = integer_arg("dataset_id")
     return store.listing(
-        user["id"], decision, status, min(max(limit, 1), 500), max(offset, 0)
+        user["id"], decision, status, dataset_id, min(max(limit, 1), 500), max(offset, 0)
     )
 
 

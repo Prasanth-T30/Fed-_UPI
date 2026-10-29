@@ -57,6 +57,8 @@ def test_upload_export_roundtrip(auth):
     assert r.status_code == 200, r.text
     ds = r.json()["dataset"]
     assert ds["rows"] == 300 and len(c.get("/api/datasets", headers=h).json()) >= 1
+    filtered = c.get(f"/api/transactions?dataset_id={ds['id']}&limit=500", headers=h).json()
+    assert len(filtered) == 300 and all(row["dataset_id"] == ds["id"] for row in filtered)
     for fmt, magic in (("csv", b""), ("xlsx", b"PK"), ("docx", b"PK"), ("pdf", b"%PDF"), ("json", b"[")):
         e = c.get(f"/api/export/flagged?format={fmt}&dataset_id={ds['id']}", headers=h)
         assert e.status_code == 200 and e.content.startswith(magic), fmt
