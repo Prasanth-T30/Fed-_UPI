@@ -1,0 +1,22 @@
+transaction_id,timestamp,bank,sender_id,receiver_id,merchant_category,amount_inr,amount_to_average_ratio,transaction_hour,account_age_days,transactions_last_hour,minutes_since_last_transaction,sender_txn_24h,same_receiver_24h,failed_login_attempts_24h,upi_pin_failures_24h,is_new_device,is_new_beneficiary,is_collect_request,is_weekend,scenario,is_fraud
+BAND-1,2026-08-01 08:00:00,Bank A,A-BAND-1,R-BAND-1,p2p,500,0.8,8,1200,0,10080.0,0,0,0,0,0,0,0,1,amount_band,0
+BAND-2,2026-08-01 09:00:00,Bank A,A-BAND-2,R-BAND-2,p2p,69999,0.8,9,1200,0,10080.0,0,0,0,0,0,0,0,1,amount_band,0
+BAND-3,2026-08-01 10:00:00,Bank A,A-BAND-3,R-BAND-3,p2p,70000,0.8,10,1200,0,10080.0,0,0,0,0,0,0,0,1,amount_band,1
+BAND-4,2026-08-01 11:00:00,Bank A,A-BAND-4,R-BAND-4,p2p,99999,0.8,11,1200,0,10080.0,0,0,0,0,0,0,0,1,amount_band,1
+BAND-5,2026-08-01 12:00:00,Bank A,A-BAND-5,R-BAND-5,p2p,100000,0.8,12,1200,0,10080.0,0,0,0,0,0,0,0,1,amount_band,1
+BAND-6,2026-08-01 13:00:00,Bank A,A-BAND-6,R-BAND-6,p2p,199000,0.8,13,1200,0,10080.0,0,0,0,0,0,0,0,1,amount_band,1
+REPEAT-1,2026-08-02 10:00:00,Bank A,A-REPEAT1,R-REPEAT1,p2p,9000,0.8,10,1200,0,10080.0,0,0,0,0,0,0,0,1,repeat_receiver,0
+REPEAT-2,2026-08-02 10:10:00,Bank A,A-REPEAT1,R-REPEAT1,p2p,9250,0.8,10,1200,1,10.0,1,1,0,0,0,0,0,1,repeat_receiver,0
+REPEAT-3,2026-08-02 10:20:00,Bank A,A-REPEAT1,R-REPEAT1,p2p,9500,0.8,10,1200,2,10.0,2,2,0,0,0,0,0,1,repeat_receiver,1
+FRIEND-1,2026-08-03 08:00:00,Bank A,A-FRIEND,R-FRIEND-1,p2p,400,0.8,8,1200,0,10080.0,0,0,0,0,0,0,0,0,legit,0
+FRIEND-2,2026-08-03 11:00:00,Bank A,A-FRIEND,R-FRIEND-2,p2p,450,0.8,11,1200,0,180.0,1,0,0,0,0,0,0,0,legit,0
+FRIEND-3,2026-08-03 14:00:00,Bank A,A-FRIEND,R-FRIEND-3,p2p,500,0.8,14,1200,0,180.0,2,0,0,0,0,0,0,0,legit,0
+BURST-1,2026-08-04 11:00:00,Bank A,A-BURST1,R-BURST-1,p2p,2000,0.8,11,1200,0,10080.0,0,0,0,0,0,0,0,0,mule_account,0
+BURST-2,2026-08-04 11:08:00,Bank A,A-BURST1,R-BURST-2,p2p,2100,0.8,11,1200,1,8.0,1,0,0,0,0,0,0,0,mule_account,0
+BURST-3,2026-08-04 11:16:00,Bank A,A-BURST1,R-BURST-3,p2p,2200,0.8,11,1200,2,8.0,2,0,0,0,0,0,0,0,mule_account,0
+BURST-4,2026-08-04 11:24:00,Bank A,A-BURST1,R-BURST-4,p2p,2300,0.8,11,1200,3,8.0,3,0,0,0,0,0,0,0,mule_account,0
+BURST-5,2026-08-04 11:32:00,Bank A,A-BURST1,R-BURST-5,p2p,2400,0.8,11,1200,4,8.0,4,0,0,0,0,0,0,0,mule_account,1
+BURST-6,2026-08-04 11:40:00,Bank A,A-BURST1,R-BURST-6,p2p,2500,0.8,11,1200,5,8.0,5,0,0,0,0,0,0,0,mule_account,1
+MODERATE-1,2026-08-05 10:00:00,Bank A,A-MODERATE-1,R-MODERATE-1,p2p,75000,0.8,10,1200,0,10080.0,0,0,0,0,0,0,0,0,amount_band,1
+MODERATE-2,2026-08-05 11:00:00,Bank A,A-MODERATE-2,R-MODERATE-2,p2p,77000,0.8,11,1200,0,10080.0,0,0,0,0,0,0,0,0,amount_band,1
+MODERATE-3,2026-08-05 12:00:00,Bank A,A-MODERATE-3,R-MODERATE-3,p2p,79000,0.8,12,1200,0,10080.0,0,0,0,0,0,0,0,0,amount_band,1

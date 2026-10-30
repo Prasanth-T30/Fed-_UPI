@@ -44,3 +44,8 @@ tmp/
 samples/
 papers/
 output/
+
+# Deterministic integration fixtures are source-controlled.
+!/samples/
+!/samples/policy_rules_demo.csv
+!/samples/upi_test_transactions.csv
