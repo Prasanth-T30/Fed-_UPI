@@ -24,7 +24,14 @@ async function raw(path, opts = {}) {
   }
   return res;
 }
-const req = async (path, opts) => (await raw(path, opts)).json();
+const req = async (path, opts) => {
+  const res = await raw(path, opts);
+  const type = res.headers.get("Content-Type") || "";
+  if (!type.includes("application/json")) {
+    throw new Error("The backend returned an invalid response. Restart the backend service and try again.");
+  }
+  return res.json();
+};
 const json = (method, body) => ({ method, headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
 
 /** Download a file endpoint through fetch so the auth header is sent. */
@@ -49,6 +56,12 @@ export const api = {
   changePassword: (b) => req("/auth/password", json("POST", b)),
   overview: () => req("/overview"),
   score: (t) => req("/transactions/score", json("POST", t)),
+  lookupTransaction: ({ transactionId, referenceId }) => {
+    const q = new URLSearchParams();
+    if (transactionId) q.set("transaction_id", transactionId);
+    if (referenceId) q.set("reference_id", referenceId);
+    return req(`/transactions/lookup?${q}`);
+  },
   upload: (file) => {
     const f = new FormData();
     f.append("file", file);

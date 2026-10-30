@@ -18,6 +18,7 @@ function makeLiveSnapshot() {
       : decision === "STEP_UP_AUTH" ? "Unusual transaction pattern requires verification" : null;
     return {
       id: `live-${stamp}-${index}`,
+      transaction_id: `TXN${String(stamp).slice(-8)}${String(index + 1).padStart(3, "0")}`,
       txn_ref: `LIVE${String(stamp).slice(-6)}${String(index + 1).padStart(3, "0")}`,
       bank: LIVE_BANKS[Math.floor(Math.random() * LIVE_BANKS.length)],
       category: LIVE_CATEGORIES[Math.floor(Math.random() * LIVE_CATEGORIES.length)],
@@ -182,7 +183,7 @@ export default function LiveMonitor() {
             ? `${filename || "Selected file"} · refresh reloads the same stored analysis`
             : `Randomized demo stream${lastUpdated ? ` · updated ${lastUpdated.toLocaleTimeString()}` : ""}`}
       >
-        <TxnTable rows={rows} />
+        <TxnTable rows={rows} showTransactionId />
       </Card>
     </Page>
   );

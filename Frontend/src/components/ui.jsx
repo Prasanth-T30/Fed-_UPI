@@ -55,7 +55,7 @@ export const ScoreBar = ({ value }) => {
 export const Empty = ({ children }) => <div className="empty">{children}</div>;
 export const ErrorNote = ({ error }) => (error ? <div className="note bad">{error}</div> : null);
 
-export function TxnTable({ rows, onStatus, compact }) {
+export function TxnTable({ rows, onStatus, compact, showTransactionId = false }) {
   const [open, setOpen] = useState(null);
   if (!rows?.length) return <Empty>No transactions yet.</Empty>;
   return (
@@ -63,6 +63,7 @@ export function TxnTable({ rows, onStatus, compact }) {
       <table>
         <thead>
           <tr>
+            {showTransactionId && <th>Transaction ID</th>}
             <th>Ref</th><th>Bank</th><th>Category</th><th className="num">Amount</th><th>Risk %</th><th>Risk tier</th>
             {!compact && <th>Why</th>}{onStatus && <th>Analyst</th>}
           </tr>
@@ -71,7 +72,8 @@ export function TxnTable({ rows, onStatus, compact }) {
           {rows.map((r) => (
             <Fragment key={r.id}>
               <tr className={open === r.id ? "sel" : ""} onClick={() => setOpen(open === r.id ? null : r.id)}>
-                <td className="mono">{r.txn_ref}</td><td>{r.bank}</td><td>{r.category}</td>
+                {showTransactionId && <td className="mono">{r.transaction_id || r.txn_ref || r.id}</td>}
+                <td className="mono">{r.reference_id || r.txn_ref}</td><td>{r.bank}</td><td>{r.category}</td>
                 <td className="num">{inr(r.amount)}</td><td><ScoreBar value={r.risk_score} /></td>
                 <td><DecisionBadge d={r.decision} /></td>
                 {!compact && <td className="why">{r.reasons?.[0]?.reason || <span className="muted">—</span>}</td>}
@@ -90,7 +92,7 @@ export function TxnTable({ rows, onStatus, compact }) {
               </tr>
               {open === r.id && (
                 <tr key={`${r.id}-d`} className="detail">
-                  <td colSpan={9}>
+                  <td colSpan={showTransactionId ? 10 : 9}>
                     <ReasonList reasons={r.reasons} />
                     {r.ground_truth !== null && r.ground_truth !== undefined && (
                       <small className="muted">Simulation ground truth: {r.ground_truth ? "fraud" : "legitimate"}</small>

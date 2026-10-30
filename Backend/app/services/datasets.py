@@ -14,7 +14,8 @@ ALLOWED = {".csv", ".xlsx", ".xlsm", ".json", ".docx", ".txt", ".tsv"}
 MAX_BYTES = 300 * 1024 * 1024
 
 ALIASES = {
-    "transaction_id": ("txn_id", "transaction_ref", "reference", "reference_id", "payment_id", "id"),
+    "transaction_id": ("txn_id", "payment_id", "id"),
+    "reference_id": ("transaction_ref", "reference", "ref", "rrn", "utr", "upi_reference_id"),
     "timestamp": ("transaction_time", "transaction_date", "date_time", "datetime", "created_at", "date", "time", "step"),
     "bank": ("bank_name", "institution", "provider"),
     "sender_id": ("sender", "payer", "payer_id", "customer_id", "user_id", "account_id", "source_account", "name_orig"),

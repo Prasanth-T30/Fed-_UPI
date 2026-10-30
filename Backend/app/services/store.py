@@ -2,7 +2,7 @@
 
 import datetime as dt
 
-from sqlalchemy import JSON, Column, DateTime, Float, Integer, String, create_engine, func, select
+from sqlalchemy import JSON, Column, DateTime, Float, Integer, String, create_engine, func, or_, select
 from sqlalchemy.orm import declarative_base, sessionmaker
 
 from app.config import DB_URL
@@ -21,6 +21,7 @@ class Txn(Base):
     id = Column(Integer, primary_key=True)
     owner_id = Column(Integer, nullable=True, index=True)
     txn_ref = Column(String, index=True)
+    reference_id = Column(String, nullable=True, index=True)
     created_at = Column(DateTime, default=_utcnow, index=True)
     source = Column(String, default="api")           # api | upload | simulation
     bank = Column(String, default="-")
@@ -78,6 +79,7 @@ def _migrate():
         ("txn_time", "DATETIME"),
         ("owner_id", "INTEGER"),
         ("model_version", "VARCHAR"),
+        ("reference_id", "VARCHAR"),
     )
     for name, typ in additions:
         if name not in cols:
@@ -192,6 +194,23 @@ def delete_dataset(owner_id, dataset_id):
         return stored
 
 
+def replace_owner_state_with_dataset(owner_id: int, keep_dataset_id: int) -> list[str]:
+    """Remove every older analysis record for an owner after a replacement upload succeeds."""
+    with Session() as s:
+        old_datasets = s.execute(
+            select(Dataset).where(Dataset.owner_id == owner_id, Dataset.id != keep_dataset_id)
+        ).scalars().all()
+        stored_files = [dataset.stored_as for dataset in old_datasets]
+        s.query(Txn).filter(
+            Txn.owner_id == owner_id,
+            or_(Txn.dataset_id.is_(None), Txn.dataset_id != keep_dataset_id),
+        ).delete(synchronize_session=False)
+        for dataset in old_datasets:
+            s.delete(dataset)
+        s.commit()
+        return stored_files
+
+
 def query_rows(owner_id, decisions=None, status=None, dataset_id=None, limit=20000):
     with Session() as s:
         q = select(Txn).where(Txn.owner_id == owner_id).order_by(Txn.id.desc())
@@ -211,6 +230,7 @@ def row_dict(t: Txn, compact: bool = False) -> dict:
         "risk_level": t.risk_level, "decision": t.decision, "reasons": t.reasons or [],
         "ground_truth": t.ground_truth, "status": t.status, "dataset_id": t.dataset_id,
         "model_version": t.model_version,
+        "reference_id": t.reference_id,
     }
     if not compact:
         row.update({
@@ -277,6 +297,55 @@ def listing(owner_id, decision=None, status=None, dataset_id=None, limit=100, of
             q = q.where(Txn.dataset_id == dataset_id)
         rows = s.execute(q.limit(limit).offset(offset)).scalars().all()
         return [row_dict(r, compact=True) for r in rows]
+
+
+def find_transaction(owner_id: int, txn_id=None, transaction_identifier=None, reference=None):
+    """Find one scored transaction by database ID, source transaction ID, or reference ID."""
+    with Session() as s:
+        q = select(Txn).where(Txn.owner_id == owner_id)
+        if txn_id is not None:
+            q = q.where(Txn.id == txn_id)
+        elif transaction_identifier is not None:
+            q = q.where(Txn.txn_ref == transaction_identifier)
+        else:
+            q = q.where((Txn.reference_id == reference) | (Txn.txn_ref == reference))
+        row = s.execute(q.order_by(Txn.id.desc()).limit(1)).scalar_one_or_none()
+        return row_dict(row) if row else None
+
+
+def ensure_dataset_references(owner_id: int, dataset_id: int):
+    """Backfill reference IDs for a dataset scored before this field was stored separately."""
+    with Session() as s:
+        missing = s.scalar(select(func.count(Txn.id)).where(
+            Txn.owner_id == owner_id, Txn.dataset_id == dataset_id, Txn.reference_id.is_(None)
+        )) or 0
+        dataset = s.get(Dataset, dataset_id)
+        if not missing or not dataset or dataset.owner_id != owner_id:
+            return
+        stored_as, filename = dataset.stored_as, dataset.filename
+
+    from app.services import datasets as dataset_service
+    frame = dataset_service.normalize_transactions(
+        dataset_service.parse(filename, dataset_service.load_file(stored_as))
+    )
+    if "reference_id" not in frame.columns:
+        return
+    pairs = frame[["transaction_id", "reference_id"]].dropna()
+    with Session() as s:
+        for transaction_id, reference_id in pairs.itertuples(index=False, name=None):
+            s.query(Txn).filter(
+                Txn.owner_id == owner_id,
+                Txn.dataset_id == dataset_id,
+                Txn.txn_ref == str(transaction_id),
+            ).update({Txn.reference_id: str(reference_id)}, synchronize_session=False)
+        s.commit()
+
+
+def ensure_all_dataset_references(owner_id: int):
+    with Session() as s:
+        ids = s.execute(select(Dataset.id).where(Dataset.owner_id == owner_id)).scalars().all()
+    for dataset_id in ids:
+        ensure_dataset_references(owner_id, dataset_id)
 
 
 def set_status(owner_id: int, txn_id: int, status: str):

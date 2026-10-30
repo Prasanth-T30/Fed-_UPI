@@ -46,6 +46,30 @@ def test_score_endpoint(auth):
     assert scam["risk_score"] > ok.json()["risk_score"] and scam["reasons"]
 
 
+def test_transaction_lookup_by_id_or_reference(auth):
+    if not service.ready:
+        pytest.skip("model not trained")
+    h, _ = auth
+    upload = c.post(
+        "/api/datasets",
+        headers=h,
+        files={"file": ("lookup.csv", b"transaction_id,reference_id,amount_inr\nLOOKUP-TXN-1,LOOKUP-REF-1,750\n")},
+    )
+    assert upload.status_code == 200, upload.text
+    row = upload.json()["results"][0]
+    by_id = c.get(f"/api/transactions/lookup?transaction_id={row['id']}", headers=h)
+    by_uploaded_id = c.get("/api/transactions/lookup?transaction_id=LOOKUP-TXN-1", headers=h)
+    by_ref = c.get("/api/transactions/lookup?reference_id=LOOKUP-REF-1", headers=h)
+    assert by_id.status_code == 200 and by_id.json()["txn_ref"] == "LOOKUP-TXN-1"
+    assert by_uploaded_id.status_code == 200 and by_uploaded_id.json()["id"] == row["id"]
+    assert by_ref.status_code == 200 and by_ref.json()["id"] == row["id"]
+    assert by_ref.json()["reference_id"] == "LOOKUP-REF-1"
+    assert c.get("/api/transactions/lookup", headers=h).status_code == 400
+    assert c.get("/api/transactions/lookup?transaction_id=1&reference_id=x", headers=h).status_code == 400
+    assert c.get("/api/transactions/lookup?reference_id=missing", headers=h).status_code == 404
+    c.delete(f"/api/datasets/{upload.json()['dataset']['id']}", headers=h)
+
+
 def test_upload_export_roundtrip(auth):
     if not service.ready:
         pytest.skip("model not trained")
@@ -65,8 +89,11 @@ def test_upload_export_roundtrip(auth):
     assert c.get("/api/export/flagged?format=exe", headers=h).status_code == 400
     flexible = c.post("/api/datasets", headers=h, files={"file": ("x.csv", b"a,b\n1,2\n")})
     assert flexible.status_code == 200
+    remaining = c.get("/api/datasets", headers=h).json()
+    assert [dataset["id"] for dataset in remaining] == [flexible.json()["dataset"]["id"]]
+    assert c.get(f"/api/transactions?dataset_id={ds['id']}", headers=h).json() == []
     assert c.delete(f"/api/datasets/{flexible.json()['dataset']['id']}", headers=h).status_code == 200
-    assert c.delete(f"/api/datasets/{ds['id']}", headers=h).status_code == 200
+    assert c.delete(f"/api/datasets/{ds['id']}", headers=h).status_code == 404
 
 
 def test_policy_rules_demo_upload(auth):

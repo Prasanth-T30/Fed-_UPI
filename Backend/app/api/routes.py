@@ -232,6 +232,11 @@ def _persist(
                 else None,
                 txn_time=_when(r),
                 txn_ref=str(r.get("transaction_id", f"API{i}")),
+                reference_id=(
+                    str(r["reference_id"])
+                    if "reference_id" in r and pd.notna(r["reference_id"]) and r["reference_id"] != ""
+                    else None
+                ),
                 source=source,
                 bank=str(r.get("bank", "-")),
                 category=str(r["merchant_category"]),
@@ -364,6 +369,12 @@ def upload_dataset():
         datasets.remove_file(stored)
         store.delete_dataset(user["id"], ds_id)
         raise
+    # A successful upload becomes the owner's only active analysis. This is
+    # intentionally after scoring so an invalid replacement cannot destroy
+    # the user's current datasets, searches, alerts, or dashboard history.
+    old_files = store.replace_owner_state_with_dataset(user["id"], ds_id)
+    for old_file in old_files:
+        datasets.remove_file(old_file)
     ds, _ = store.get_dataset(user["id"], ds_id)
     return {"dataset": ds, **out}
 
@@ -444,9 +455,35 @@ def transactions():
     limit = integer_arg("limit") or 100
     offset = integer_arg("offset") or 0
     dataset_id = integer_arg("dataset_id")
+    if dataset_id:
+        store.ensure_dataset_references(user["id"], dataset_id)
     return store.listing(
         user["id"], decision, status, dataset_id, min(max(limit, 1), 500), max(offset, 0)
     )
+
+
+@router.get("/transactions/lookup")
+def lookup_transaction():
+    """Return a scored row by uploaded transaction ID, internal ID, or reference ID."""
+    user = current_user()
+    raw_id = (request.args.get("transaction_id") or "").strip()
+    reference = (request.args.get("reference_id") or "").strip()
+    if bool(raw_id) == bool(reference):
+        raise BadRequest("Enter either a transaction ID or a reference ID.")
+    row = None
+    if raw_id:
+        # Uploaded transaction IDs are stored verbatim in txn_ref and may be
+        # alphanumeric. Prefer that exact value; retain the database row ID as
+        # a fallback for the numeric IDs already shown elsewhere in the app.
+        row = store.find_transaction(user["id"], transaction_identifier=raw_id)
+        if not row and raw_id.isdigit() and int(raw_id) > 0:
+            row = store.find_transaction(user["id"], txn_id=int(raw_id))
+    else:
+        store.ensure_all_dataset_references(user["id"])
+        row = store.find_transaction(user["id"], reference=reference)
+    if not row:
+        raise NotFound("No transaction was found for that ID in your uploaded datasets or transaction history.")
+    return row
 
 
 class StatusIn(BaseModel):
