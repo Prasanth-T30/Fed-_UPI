@@ -49,3 +49,8 @@ output/
 !/samples/
 !/samples/policy_rules_demo.csv
 !/samples/upi_test_transactions.csv
+samples
+papers
+.pytest_cache
+.mypy_cache
+.ruff_cache
