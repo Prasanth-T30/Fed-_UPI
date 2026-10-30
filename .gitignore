@@ -43,3 +43,4 @@ Backend/data/paysim_transactions.csv
 tmp/
 samples/
 papers/
+output/
