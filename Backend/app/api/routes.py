@@ -506,6 +506,16 @@ def clear_history():
     return {"cleared": True}
 
 
+@router.delete("/project-data")
+def reset_project_data():
+    """Clear the signed-in user's datasets and all transaction-derived module state."""
+    user = current_user()
+    stored_files = store.reset_owner_state(user["id"])
+    for stored_file in stored_files:
+        datasets.remove_file(stored_file)
+    return {"cleared": True, "datasets_removed": len(stored_files)}
+
+
 @router.get("/model/report")
 def report():
     if not REPORT_PATH.exists():

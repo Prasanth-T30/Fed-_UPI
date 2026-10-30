@@ -3,7 +3,11 @@ import { Bar, BarChart, CartesianGrid, Legend, Line, LineChart, ResponsiveContai
 import { api, pct } from "../services/api";
 import { Badge, Card, ErrorNote, Page, Stat } from "../components/ui";
 
-const tip = { contentStyle: { background: "var(--card)", border: "1px solid var(--line)" } };
+const tip = {
+  contentStyle: { background: "var(--card)", border: "1px solid var(--line)", color: "var(--chart-text)" },
+  labelStyle: { color: "var(--chart-text)" },
+  itemStyle: { color: "var(--chart-text)" },
+};
 
 export default function ModelInsights() {
   const [r, setR] = useState(null);

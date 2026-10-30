@@ -90,7 +90,7 @@ export default function FederatedLab() {
               <LineChart data={rounds}>
                 <CartesianGrid stroke="var(--line)" vertical={false} />
                 <XAxis dataKey="round" stroke="var(--muted)" /><YAxis domain={[0, 1]} stroke="var(--muted)" width={34} />
-                <Tooltip contentStyle={{ background: "var(--card)", border: "1px solid var(--line)" }} />
+                <Tooltip contentStyle={{ background: "var(--card)", border: "1px solid var(--line)", color: "var(--chart-text)" }} labelStyle={{ color: "var(--chart-text)" }} itemStyle={{ color: "var(--chart-text)" }} />
                 <Legend />
                 <Line dataKey="f1" name="F1 (val)" stroke="var(--accent)" strokeWidth={2} dot={false} />
                 <Line dataKey="pr_auc" name="PR-AUC (val)" stroke="var(--green)" strokeWidth={2} dot={false} />

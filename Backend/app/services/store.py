@@ -211,6 +211,20 @@ def replace_owner_state_with_dataset(owner_id: int, keep_dataset_id: int) -> lis
         return stored_files
 
 
+def reset_owner_state(owner_id: int) -> list[str]:
+    """Delete all operational datasets and transaction-derived state for one owner."""
+    with Session() as s:
+        owned_datasets = s.execute(
+            select(Dataset).where(Dataset.owner_id == owner_id)
+        ).scalars().all()
+        stored_files = [dataset.stored_as for dataset in owned_datasets]
+        s.query(Txn).filter(Txn.owner_id == owner_id).delete(synchronize_session=False)
+        for dataset in owned_datasets:
+            s.delete(dataset)
+        s.commit()
+        return stored_files
+
+
 def query_rows(owner_id, decisions=None, status=None, dataset_id=None, limit=20000):
     with Session() as s:
         q = select(Txn).where(Txn.owner_id == owner_id).order_by(Txn.id.desc())

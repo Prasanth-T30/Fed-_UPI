@@ -2,6 +2,8 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { Activity, Database, LoaderCircle, Pause, Play, RefreshCw, Trash2 } from "lucide-react";
 import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import { api, inr } from "../services/api";
+import { clearLiveTransactions as clearStoredLiveTransactions, saveLiveTransactions } from "../services/liveTransactions";
+import { useAuth } from "../context";
 import { Card, ErrorNote, Page, Stat, TxnTable } from "../components/ui";
 
 const LIVE_BANKS = ["Bank A", "Bank B", "Bank C", "Bank D", "Bank E"];
@@ -36,6 +38,7 @@ function makeLiveSnapshot() {
 }
 
 export default function LiveMonitor() {
+  const { user } = useAuth();
   const location = useLocation();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
@@ -61,7 +64,9 @@ export default function LiveMonitor() {
         setRows(await api.transactions({ limit: 150, dataset_id: datasetId }));
       } else {
         if (!quiet) await new Promise((resolve) => window.setTimeout(resolve, 300));
-        setRows(makeLiveSnapshot());
+        const snapshot = makeLiveSnapshot();
+        setRows(snapshot);
+        saveLiveTransactions(user.id, snapshot);
       }
       setLastUpdated(new Date());
       setErr("");
@@ -72,7 +77,7 @@ export default function LiveMonitor() {
       setLoading(false);
       if (!quiet) setRefreshing(false);
     }
-  }, [datasetId]);
+  }, [datasetId, user.id]);
 
   useEffect(() => {
     api.datasets().then(setDatasets).catch((error) => setErr(error.message));
@@ -106,6 +111,7 @@ export default function LiveMonitor() {
 
   const clearLiveTransactions = () => {
     setRows([]);
+    clearStoredLiveTransactions(user.id);
     setErr("");
     setLastUpdated(new Date());
   };

@@ -122,3 +122,18 @@ def test_policy_rules_demo_upload(auth):
     assert all(0 <= x["risk_score"] <= 99.9 for x in rows.values())
     friend = [rows[i] for i in demo.index if demo.loc[i, "sender_id"] == "A-FRIEND"]
     assert friend[-1]["decision"] == "ALLOW"
+
+
+def test_profile_project_reset_clears_operational_state(auth):
+    h, _ = auth
+    uploaded = c.post(
+        "/api/datasets",
+        headers=h,
+        files={"file": ("reset.csv", b"transaction_id,reference_id,amount_inr\nRESET-TXN,RESET-REF,500\n")},
+    )
+    assert uploaded.status_code == 200
+    assert c.get("/api/datasets", headers=h).json()
+    result = c.delete("/api/project-data", headers=h)
+    assert result.status_code == 200 and result.json()["cleared"] is True
+    assert c.get("/api/datasets", headers=h).json() == []
+    assert c.get("/api/transactions", headers=h).json() == []

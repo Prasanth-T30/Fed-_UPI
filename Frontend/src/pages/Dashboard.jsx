@@ -144,7 +144,7 @@ export default function Dashboard() {
                 <CartesianGrid stroke="var(--line)" vertical={false} />
                 <XAxis dataKey="index" hide />
                 <YAxis domain={[0, 100]} stroke="var(--muted)" width={34} tickLine={false} axisLine={false} />
-                <Tooltip contentStyle={{ background: "var(--card)", border: "1px solid var(--line)", borderRadius: 10 }} />
+                <Tooltip contentStyle={{ background: "var(--card)", border: "1px solid var(--line)", borderRadius: 10, color: "var(--chart-text)" }} labelStyle={{ color: "var(--chart-text)" }} itemStyle={{ color: "var(--chart-text)" }} />
                 <Area type="monotone" dataKey="score" name="Risk score" stroke="var(--accent)" fill="url(#risk-fill)" strokeWidth={2.5} />
               </AreaChart>
             </ResponsiveContainer>
@@ -158,7 +158,7 @@ export default function Dashboard() {
                 <CartesianGrid stroke="var(--line)" vertical={false} />
                 <XAxis dataKey="name" stroke="var(--muted)" tickLine={false} axisLine={false} />
                 <YAxis stroke="var(--muted)" width={40} allowDecimals={false} tickLine={false} axisLine={false} />
-                <Tooltip contentStyle={{ background: "var(--card)", border: "1px solid var(--line)", borderRadius: 10 }} />
+                <Tooltip contentStyle={{ background: "var(--card)", border: "1px solid var(--line)", borderRadius: 10, color: "var(--chart-text)" }} labelStyle={{ color: "var(--chart-text)" }} itemStyle={{ color: "var(--chart-text)" }} />
                 <Bar dataKey="value" name="Transactions" radius={[7, 7, 0, 0]}>{riskMix.map((item) => <Cell key={item.name} fill={item.color} />)}</Bar>
               </BarChart>
             </ResponsiveContainer>

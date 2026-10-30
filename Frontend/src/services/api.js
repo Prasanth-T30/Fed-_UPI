@@ -81,6 +81,7 @@ export const api = {
   transactions: (q = {}) => req(`/transactions?${new URLSearchParams(q)}`),
   setStatus: (id, status) => req(`/transactions/${id}`, json("PATCH", { status })),
   clear: () => req("/transactions", { method: "DELETE" }),
+  resetProjectData: () => req("/project-data", { method: "DELETE" }),
   report: () => req("/model/report"),
   fedStatus: () => req("/federated/status"),
   fedTrain: (cfg) => req("/federated/train", json("POST", cfg)),

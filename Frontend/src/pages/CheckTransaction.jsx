@@ -1,8 +1,11 @@
 import { useState } from "react";
 import { api, inr } from "../services/api";
+import { findLiveTransaction } from "../services/liveTransactions";
+import { useAuth } from "../context";
 import { Card, DecisionBadge, ErrorNote, Page, ReasonList } from "../components/ui";
 
 export default function CheckTransaction() {
+  const { user } = useAuth();
   const [transactionId, setTransactionId] = useState("");
   const [referenceId, setReferenceId] = useState("");
   const [result, setResult] = useState(null);
@@ -23,10 +26,12 @@ export default function CheckTransaction() {
     }
     setBusy(true);
     try {
-      setResult(await api.lookupTransaction({
+      const identifiers = {
         transactionId: transactionId.trim(),
         referenceId: referenceId.trim(),
-      }));
+      };
+      const liveResult = findLiveTransaction(user.id, identifiers);
+      setResult(liveResult || await api.lookupTransaction(identifiers));
     } catch (requestError) {
       setError(requestError.message);
     } finally {
@@ -64,7 +69,7 @@ export default function CheckTransaction() {
               <DecisionBadge d={result.decision} />
               <div className="transaction-summary">
                 <span>Transaction ID <b>{result.id}</b></span>
-                <span>Reference ID <b>{result.reference_id || "—"}</b></span>
+                <span>Reference ID <b>{result.reference_id || (result.source === "live_simulation" ? result.txn_ref : "—")}</b></span>
                 <span>Amount <b>{inr(result.amount)}</b></span>
                 <span>Category <b>{result.category || "—"}</b></span>
                 <span>Source <b>{result.source === "upload" ? "Uploaded dataset" : result.source}</b></span>

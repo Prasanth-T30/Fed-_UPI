@@ -1,16 +1,21 @@
 import { useState } from "react";
+import { RefreshCw } from "lucide-react";
+import { useNavigate } from "react-router-dom";
 import { api } from "../services/api";
+import { clearLiveTransactions } from "../services/liveTransactions";
 import { useAuth, useTheme } from "../context";
 import { Card, Page } from "../components/ui";
 
 export const initials = (name = "") => name.split(/\s+/).filter(Boolean).slice(0, 2).map((s) => s[0].toUpperCase()).join("") || "U";
 
 export default function Profile() {
+  const navigate = useNavigate();
   const { user, setUser, logout } = useAuth();
   const { theme, toggle } = useTheme();
   const [p, setP] = useState({ name: user.name, organization: user.organization || "", role: user.role || "" });
   const [pw, setPw] = useState({ current_password: "", new_password: "" });
   const [msg, setMsg] = useState({});
+  const [resetting, setResetting] = useState(false);
   const flash = (k, ok, text) => setMsg((m) => ({ ...m, [k]: { ok, text } }));
 
   const save = async (e) => {
@@ -23,6 +28,20 @@ export default function Profile() {
     catch (x) { flash("w", false, x.message); }
   };
   const Note = ({ k }) => msg[k] ? <div className={`note ${msg[k].ok ? "good" : "bad"}`}>{msg[k].text}</div> : null;
+
+  const refreshProject = async () => {
+    if (!window.confirm("Refresh all project data? This permanently removes your uploaded datasets, transaction history, alerts, searches, and dashboard results.")) return;
+    setResetting(true);
+    try {
+      await api.resetProjectData();
+      clearLiveTransactions(user.id);
+      navigate("/", { replace: true });
+    } catch (error) {
+      flash("r", false, error.message);
+    } finally {
+      setResetting(false);
+    }
+  };
 
   return (
     <Page title="Profile" sub="Manage your account, appearance and security.">
@@ -49,6 +68,13 @@ export default function Profile() {
                 <button className={theme === "light" ? "on" : ""} onClick={() => theme !== "light" && toggle()}>Light</button>
                 <button className={theme === "dark" ? "on" : ""} onClick={() => theme !== "dark" && toggle()}>Dark</button>
               </div></div>
+          </Card>
+          <Card title="Refresh project data" hint="Start every operational module with a clean state">
+            <p className="muted small">Removes uploaded datasets, dashboard activity, alerts, transaction searches, and the current live snapshot. Your account, profile, theme, model, and research configuration are preserved.</p>
+            <Note k="r" />
+            <button className="btn red mt" onClick={refreshProject} disabled={resetting}>
+              <RefreshCw className={resetting ? "spin" : ""} size={16} /> {resetting ? "Refreshing…" : "Refresh all project data"}
+            </button>
           </Card>
           <Card title="Change password">
             <form className="stack" onSubmit={changePw}>
